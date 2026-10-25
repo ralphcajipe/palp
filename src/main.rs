@@ -172,13 +172,68 @@ fn run(cli: Cli) -> Result<(), PalpError> {
         }
 
         Commands::Init => {
-            let path = Path::new("AGENT_DEVICE.md");
-            fs::write(path, generate_agent_guide())?;
+            // 1. Generate AGENT_DEVICE.md
+            let guide_path = Path::new("AGENT_DEVICE.md");
+            fs::write(guide_path, generate_agent_guide())?;
             println!(
                 "{} Generated {} guide for AI coding assistants.",
                 "✓".green().bold(),
-                path.display().to_string().cyan()
+                guide_path.display().to_string().cyan()
             );
+
+            // 2. Auto-wire into existing agent rule files (AGENTS.md, CLAUDE.md, .cursorrules)
+            let rule_files = ["AGENTS.md", "CLAUDE.md", ".cursorrules"];
+            let rule_snippet = "\n\n## Mobile Device Testing & Interaction (palp)\n\
+                                When instructed to inspect, navigate, touch, or test mobile screens on connected devices:\n\
+                                - Always use `palp` CLI commands (`palp snap`, `palp tap-text`, `palp tap`, `palp swipe`).\n\
+                                - Do not guess raw adb screen coordinates or take uncropped screenshots.\n\
+                                - Refer to `AGENT_DEVICE.md` and `.palprc.json` for project shortcuts.\n";
+
+            for rule_file in &rule_files {
+                let p = Path::new(rule_file);
+                if p.is_file() {
+                    if let Ok(content) = fs::read_to_string(p) {
+                        if !content.to_lowercase().contains("palp") {
+                            let mut updated = content;
+                            updated.push_str(rule_snippet);
+                            if fs::write(p, updated).is_ok() {
+                                println!(
+                                    "{} Auto-wired palp rules into {} (AI agents will automatically use palp).",
+                                    "✓".green().bold(),
+                                    rule_file.cyan()
+                                );
+                            }
+                        } else {
+                            println!(
+                                "{} Verified {} already recognizes palp.",
+                                "✓".green().bold(),
+                                rule_file.cyan()
+                            );
+                        }
+                    }
+                }
+            }
+
+            // 3. Auto-probe device if connected to populate .palprc.json
+            if let Ok(device) = select_device(target) {
+                if let Ok(metrics) = probe_device(&device) {
+                    let mut cfg = PalpConfig::load();
+                    cfg.device = Some(device.serial.clone());
+                    cfg.insets = Some(InsetsConfig {
+                        status_bar: metrics.status_bar_height,
+                        navigation_bar: metrics.navigation_bar_height,
+                    });
+                    if let Ok(saved_path) = cfg.save_to_cwd() {
+                        println!(
+                            "{} Auto-probed {} ({}) and saved {}.",
+                            "✓".green().bold(),
+                            device.serial.cyan(),
+                            device.model,
+                            saved_path.display().to_string().cyan()
+                        );
+                    }
+                }
+            }
         }
     }
 
@@ -297,6 +352,14 @@ This project uses `palp` to let AI coding assistants (**Google Antigravity**, **
    ```bash
    palp tap 0.5,0.5      # Center of screen
    palp tap 0.5,0.2      # Top header
+   ```
+
+6. **Swipe Gestures (Carousels & Scrolling):**
+   ```bash
+   palp swipe left       # Next slide / scroll right
+   palp swipe right      # Previous slide / scroll left
+   palp swipe up         # Scroll down
+   palp swipe down       # Scroll up
    ```
 "#
 }

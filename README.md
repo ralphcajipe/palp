@@ -18,32 +18,37 @@ In biology, a **palp** is a gentle sensory organ that animals use to feel, touch
 
 ## 🎯 When and How Developers Use This
 
-### 1. Improving AI Coding Assistants (Autonomous Agent Testing)
-When pair-programming with AI coding assistants, the AI can write new features in seconds. But when it's time to test changes on a real device, the AI is usually stuck or clumsy:
-- It guesses random screen coordinates.
-- It freezes for 30 seconds on looping app animations.
-- It asks you: *"Can you please tap the button on your phone and tell me what happened?"*
+### 1. Zero-Prompt Automation for AI Assistants
+When pair-programming with AI coding assistants (**Google Antigravity**, **Claude Code**, **OpenAI Codex**), you do **not** need to type `palp` commands yourself:
+- Run `palp init` once in your project folder—it auto-wires rules into `AGENTS.md`, `CLAUDE.md`, or `.cursorrules`.
+- Then, simply speak to your AI in plain English:  
+  > *"Check if the discount switch works on my connected phone."*  
+  > *"Swipe through the onboarding flashcards and verify each scene."*
+- The AI automatically chooses `palp tap-text`, `palp swipe`, and `palp snap` behind the scenes—navigating your phone autonomously without guessing coordinates or freezing on animations.
 
-**With `palp`**, your AI agent navigates and verifies the screen autonomously:
-```bash
-palp tap-text "20% Discount"   # Agent taps the new feature
-palp snap verify_screen.png     # Agent inspects a clean in-app screenshot
-```
-The AI verifies its own code directly on your phone in under 2 seconds—without asking you to tap anything.
-
-### 2. Eliminating Repetitive Manual Screen Tapping
-When building and testing mobile apps, manual tapping on repetitive tasks is slow and inefficient:
-- Dismissing permission popups.
-- Skipping intro onboarding screens.
+### 2. Eliminating Repetitive Manual Screen Tapping for Developers
+When coding without an AI assistant, manual screen tapping is slow and breaks your flow:
+- Dismissing permission dialogs and skipping onboarding slides.
 - Typing test emails and passwords repeatedly.
-- Trying to reach awkward buttons with one hand while coding.
+- Reaching awkward buttons with one hand while coding with the other.
 
-With `palp`, you automate repetitive screen taps straight from your terminal or hotkeys:
+With `palp`, you automate repetitive taps and swipes straight from your terminal or hotkeys:
 ```bash
 palp tap-text "Allow"
+palp swipe left
 palp type "test_user@example.com"
 palp snap pr_preview.png
 ```
+
+---
+
+## 🤖 How AI Agents Know to Use `palp` (Zero-Prompt Setup)
+
+### "Do I need to type `palp` commands for my agent?"
+**No.** AI assistants read project context files before taking action:
+1. **`palp init` Wires Everything:** It generates `AGENT_DEVICE.md` and appends instructions to `AGENTS.md`, `CLAUDE.md`, or `.cursorrules`.
+2. **Autonomous Tool Selection:** When you prompt: *"Touch my phone and navigate to the Sukli screen"*, the AI sees `palp` in its instructions, and immediately executes `palp tap-text "Sukli"` or `palp tap tab:sukli`.
+3. **No Clumsy Guesses:** Instead of using raw ADB commands that take uncropped screenshots or hang for 30 seconds on animations, the agent relies on `palp` for fast, dependable interaction.
 
 ---
 
@@ -120,12 +125,20 @@ palp press back
 palp press home
 ```
 
-### 6. Set Up for AI Coding Assistants
-In any project folder, run:
+### 6. Swipe Gestures (Carousels & Scrolling)
+```bash
+palp swipe left       # Next item / scroll right
+palp swipe right      # Previous item / scroll left
+palp swipe up         # Scroll down
+palp swipe down       # Scroll up
+```
+
+### 7. Set Up for AI Coding Assistants (One-Step Init)
+In your mobile project root, run:
 ```bash
 palp init
 ```
-This generates an `AGENT_DEVICE.md` manual that AI tools like **Claude Code**, **Google Antigravity**, and **OpenAI Codex** read to interact with your connected mobile screen.
+This generates `AGENT_DEVICE.md`, auto-wires your AI agent rules (`AGENTS.md`, `CLAUDE.md`, `.cursorrules`), and probes your connected phone to create `.palprc.json`. From then on, your AI agent automatically uses `palp` whenever you prompt it to test or navigate your phone.
 
 ---
 
