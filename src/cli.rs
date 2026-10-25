@@ -67,7 +67,7 @@ pub struct SnapArgs {
 
 #[derive(Args, Debug)]
 pub struct TapArgs {
-    /// Target to tap: named shortcut (e.g., tab:commute), percentage (e.g., 0.5,0.5), or pixels (e.g., 540,1100)
+    /// Target to tap: named shortcut (e.g., btn:submit or tab:home), percentage (e.g., 0.5,0.5), or pixels (e.g., 540,1100)
     pub target: String,
 }
 

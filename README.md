@@ -22,8 +22,9 @@ In biology, a **palp** is a gentle sensory organ that animals use to feel, touch
 When pair-programming with AI coding assistants (**Google Antigravity**, **Claude Code**, **OpenAI Codex**), you do **not** need to type `palp` commands yourself:
 - Run `palp init` once in your project folder—it auto-wires rules into `AGENTS.md`, `CLAUDE.md`, or `.cursorrules`.
 - Then, simply speak to your AI in plain English:  
-  > *"Check if the discount switch works on my connected phone."*  
-  > *"Swipe through the onboarding flashcards and verify each scene."*
+  > *"Sign in with the test account and check if the home feed loads."*  
+  > *"Tap 'Add to Cart' and verify that the checkout button appears."*  
+  > *"Swipe through the onboarding slides and tap 'Get Started'."*
 - The AI automatically chooses `palp tap-text`, `palp swipe`, and `palp snap` behind the scenes—navigating your phone autonomously without guessing coordinates or freezing on animations.
 
 ### 2. Eliminating Repetitive Manual Screen Tapping for Developers
@@ -37,7 +38,7 @@ With `palp`, you automate repetitive taps and swipes straight from your terminal
 palp tap-text "Allow"
 palp swipe left
 palp type "test_user@example.com"
-palp snap pr_preview.png
+palp snap checkout_screen.png
 ```
 
 ---
@@ -47,7 +48,7 @@ palp snap pr_preview.png
 ### "Do I need to type `palp` commands for my agent?"
 **No.** AI assistants read project context files before taking action:
 1. **`palp init` Wires Everything:** It generates `AGENT_DEVICE.md` and appends instructions to `AGENTS.md`, `CLAUDE.md`, or `.cursorrules`.
-2. **Autonomous Tool Selection:** When you prompt: *"Touch my phone and navigate to the Sukli screen"*, the AI sees `palp` in its instructions, and immediately executes `palp tap-text "Sukli"` or `palp tap tab:sukli`.
+2. **Autonomous Tool Selection:** When you prompt: *"Tap the 'Sign Up' button on my phone and capture the profile screen"*, the AI sees `palp` in its instructions, and immediately executes `palp tap-text "Sign Up"` and `palp snap profile_screen.png`.
 3. **No Clumsy Guesses:** Instead of using raw ADB commands that take uncropped screenshots or hang for 30 seconds on animations, the agent relies on `palp` for fast, dependable interaction.
 
 ---
