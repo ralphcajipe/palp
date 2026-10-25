@@ -86,6 +86,12 @@ impl Device {
         Ok(())
     }
 
+    /// Swipe across the screen from (x1, y1) to (x2, y2) over duration_ms milliseconds.
+    pub fn swipe(&self, x1: u32, y1: u32, x2: u32, y2: u32, duration_ms: u32) -> Result<(), PalpError> {
+        self.shell(&format!("input swipe {} {} {} {} {}", x1, y1, x2, y2, duration_ms))?;
+        Ok(())
+    }
+
     /// Type text into the active input field with shell escaping.
     pub fn input_text(&self, text: &str) -> Result<(), PalpError> {
         // Android adb input text requires replacing space with %s

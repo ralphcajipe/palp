@@ -44,6 +44,9 @@ pub enum Commands {
     /// Press hardware or navigation buttons (back, home, enter, tab, power)
     Press(PressArgs),
 
+    /// Swipe across the screen: left, right, up, down, or coordinates (x1,y1 x2,y2 [ms])
+    Swipe(SwipeArgs),
+
     /// Generate an AGENT_DEVICE.md instruction manual for AI coding assistants in this project
     Init,
 }
@@ -84,4 +87,17 @@ pub struct TypeArgs {
 pub struct PressArgs {
     /// Key to press: back, home, enter, tab, power
     pub key: String,
+}
+
+#[derive(Args, Debug)]
+pub struct SwipeArgs {
+    /// Direction (left, right, up, down) or start coordinates (x1,y1)
+    pub direction_or_from: String,
+
+    /// End coordinates (x2,y2) if start coordinates were specified
+    pub to: Option<String>,
+
+    /// Duration of swipe in milliseconds
+    #[arg(default_value = "250")]
+    pub duration: u32,
 }

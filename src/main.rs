@@ -126,6 +126,51 @@ fn run(cli: Cli) -> Result<(), PalpError> {
             println!("{} Key event sent successfully.", "✓".green().bold());
         }
 
+        Commands::Swipe(args) => {
+            let device = select_device(target)?;
+            let metrics = probe_device(&device)?;
+
+            let (x1, y1, x2, y2) = match args.direction_or_from.to_lowercase().as_str() {
+                "left" => {
+                    let y = (metrics.height as f32 * 0.35) as u32;
+                    let from_x = (metrics.width as f32 * 0.85) as u32;
+                    let to_x = (metrics.width as f32 * 0.15) as u32;
+                    (from_x, y, to_x, y)
+                }
+                "right" => {
+                    let y = (metrics.height as f32 * 0.35) as u32;
+                    let from_x = (metrics.width as f32 * 0.15) as u32;
+                    let to_x = (metrics.width as f32 * 0.85) as u32;
+                    (from_x, y, to_x, y)
+                }
+                "up" => {
+                    let x = metrics.width / 2;
+                    let from_y = (metrics.height as f32 * 0.70) as u32;
+                    let to_y = (metrics.height as f32 * 0.30) as u32;
+                    (x, from_y, x, to_y)
+                }
+                "down" => {
+                    let x = metrics.width / 2;
+                    let from_y = (metrics.height as f32 * 0.30) as u32;
+                    let to_y = (metrics.height as f32 * 0.70) as u32;
+                    (x, from_y, x, to_y)
+                }
+                _ => {
+                    let p1 = parse_coords(&args.direction_or_from)?;
+                    let p2 = if let Some(ref to_str) = args.to {
+                        parse_coords(to_str)?
+                    } else {
+                        return Err(PalpError::AdbFailed("Missing destination coordinates for swipe. Usage: palp swipe x1,y1 x2,y2 [ms]".into()));
+                    };
+                    (p1.0, p1.1, p2.0, p2.1)
+                }
+            };
+
+            println!("👉 Swiping from ({}, {}) to ({}, {}) over {}ms...", x1, y1, x2, y2, args.duration);
+            device.swipe(x1, y1, x2, y2, args.duration)?;
+            println!("{} Swiped successfully.", "✓".green().bold());
+        }
+
         Commands::Init => {
             let path = Path::new("AGENT_DEVICE.md");
             fs::write(path, generate_agent_guide())?;
@@ -138,6 +183,16 @@ fn run(cli: Cli) -> Result<(), PalpError> {
     }
 
     Ok(())
+}
+
+fn parse_coords(s: &str) -> Result<(u32, u32), PalpError> {
+    let parts: Vec<&str> = s.split(',').collect();
+    if parts.len() == 2 {
+        if let (Ok(x), Ok(y)) = (parts[0].trim().parse::<u32>(), parts[1].trim().parse::<u32>()) {
+            return Ok((x, y));
+        }
+    }
+    Err(PalpError::AdbFailed(format!("Invalid coordinates '{}'. Expected x,y e.g. 500,1000", s)))
 }
 
 /// Helper to ensure output filenames end in .png
