@@ -75,6 +75,10 @@ pub struct SnapArgs {
     /// Output file path for the clean screenshot (e.g., screenshot.png or preview)
     #[arg(default_value = "screenshot.png")]
     pub output: PathBuf,
+
+    /// Shrink the screenshot to this many pixels wide, keeping its proportions
+    #[arg(long, value_name = "PX", value_parser = clap::value_parser!(u32).range(1..))]
+    pub width: Option<u32>,
 }
 
 #[derive(Args, Debug)]

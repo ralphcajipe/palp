@@ -102,7 +102,7 @@ fn run(cli: Cli) -> Result<(), PalpError> {
             println!("📸 Capturing screen from {}...", device.serial);
 
             let raw_png = device.screencap_png()?;
-            let (w, h) = crop_and_save(&raw_png, &metrics, &output_path)?;
+            let (w, h) = crop_and_save(&raw_png, &metrics, &output_path, args.width)?;
 
             println!(
                 "{} Clean screenshot saved to {} ({}x{} px, status & nav bars removed)",
