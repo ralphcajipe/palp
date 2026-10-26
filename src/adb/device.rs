@@ -1,5 +1,4 @@
 use crate::error::PalpError;
-use crate::guard::AnimationGuard;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -55,11 +54,11 @@ impl Device {
         self.exec_adb(&["exec-out", "screencap", "-p"])
     }
 
-    /// Fast, animation-safe UI XML hierarchy dump.
-    /// Temporarily pauses animations via RAII guard to prevent idle state timeouts.
+    /// One UI XML hierarchy dump.
+    ///
+    /// Callers hold an `AnimationGuard` (see `poll_screen` in main) so that a wait loop pauses
+    /// animations once for the whole wait instead of on every read.
     pub fn dump_ui_xml(&self) -> Result<String, PalpError> {
-        let _guard = AnimationGuard::acquire(self);
-
         // Single atomic command: dump to tmp file, print to stdout, and clean up tmp file.
         let output = self.shell("uiautomator dump /data/local/tmp/uidump.xml >/dev/null 2>&1 && cat /data/local/tmp/uidump.xml && rm -f /data/local/tmp/uidump.xml")?;
 

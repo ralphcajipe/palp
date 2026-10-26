@@ -75,6 +75,18 @@ pub struct TapArgs {
 pub struct TapTextArgs {
     /// Text, accessibility label, or testID to search for and tap
     pub text: String,
+
+    /// Only whole-text matches count, not text that merely contains it
+    #[arg(long)]
+    pub exact: bool,
+
+    /// Tap the N-th match counted from the top of the screen, instead of letting palp choose
+    #[arg(long, value_name = "N")]
+    pub nth: Option<usize>,
+
+    /// Keep looking for this many seconds while the screen loads (0 = look once)
+    #[arg(long, value_name = "SECONDS", default_value_t = 5)]
+    pub timeout: u64,
 }
 
 #[derive(Args, Debug)]

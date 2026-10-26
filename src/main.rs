@@ -12,14 +12,17 @@ use clap::Parser;
 use colored::*;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::thread;
+use std::time::{Duration, Instant};
 
-use adb::select_device;
+use adb::{select_device, Device};
 use cli::{Cli, Commands};
 use config::{InsetsConfig, PalpConfig};
 use error::PalpError;
+use guard::AnimationGuard;
 use image::crop_and_save;
 use probe::probe_device;
-use ui::find_element_by_text;
+use ui::{parse_screen, pick, Pick, PickRule, Screen, UiElement};
 
 fn main() {
     // Ctrl+C, SIGTERM and SIGHUP would otherwise end the process without running Drop and
@@ -121,22 +124,54 @@ fn run(cli: Cli) -> Result<(), PalpError> {
 
         Commands::TapText(args) => {
             let device = select_device(target)?;
-            println!("🔍 Inspecting screen for '{}'...", args.text);
+            println!("🔍 Looking for '{}'...", args.text);
 
-            let xml = device.dump_ui_xml()?;
-            let element = find_element_by_text(&xml, &args.text)?;
-            let (cx, cy) = element.center();
+            let found = poll_screen(
+                &device,
+                Duration::from_secs(args.timeout),
+                |screen| match pick(screen, &args.text, args.exact, args.nth) {
+                    Ok(p) => Ok(Some(Picked::from_pick(screen, &p))),
+                    Err(PalpError::TextNotFound(_)) => Ok(None),
+                    Err(e) => Err(e),
+                },
+            )?;
+            let picked = found.ok_or_else(|| PalpError::TextNotFound(args.text.clone()))?;
+            let (cx, cy) = picked.chosen.center();
 
-            println!(
-                "Found matching element: \"{}\" at [{},{}][{},{}]",
-                element
-                    .text
-                    .if_empty(element.content_desc.if_empty(element.resource_id.as_str())),
-                element.bounds.left,
-                element.bounds.top,
-                element.bounds.right,
-                element.bounds.bottom
-            );
+            if picked.matches.len() > 1 {
+                println!(
+                    "Found {} matches; tapping {}:",
+                    picked.matches.len(),
+                    picked.rule.describe()
+                );
+                for (n, (el, covered)) in picked.matches.iter().enumerate() {
+                    let marker = if el.bounds == picked.chosen.bounds {
+                        "  ← tapped"
+                    } else {
+                        ""
+                    };
+                    println!(
+                        "  {}. ({}, {}) \"{}\"{}{}{}",
+                        n + 1,
+                        el.center().0,
+                        el.center().1,
+                        el.label(),
+                        if el.clickable { " [tap]" } else { "" },
+                        if *covered { " [covered]" } else { "" },
+                        marker
+                    );
+                }
+                println!("Use --nth N to tap another one.");
+            } else {
+                println!(
+                    "Found matching element: \"{}\" at [{},{}][{},{}]",
+                    picked.chosen.label(),
+                    picked.chosen.bounds.left,
+                    picked.chosen.bounds.top,
+                    picked.chosen.bounds.right,
+                    picked.chosen.bounds.bottom
+                );
+            }
 
             device.tap(cx, cy)?;
             println!(
@@ -278,6 +313,48 @@ fn run(cli: Cli) -> Result<(), PalpError> {
     Ok(())
 }
 
+/// Reads the screen until `check` finds what it wants or `timeout` passes, with animations
+/// paused once for the whole wait. Returns `None` on timeout; one read when `timeout` is 0.
+fn poll_screen<T>(
+    device: &Device,
+    timeout: Duration,
+    mut check: impl FnMut(&Screen) -> Result<Option<T>, PalpError>,
+) -> Result<Option<T>, PalpError> {
+    let _guard = AnimationGuard::acquire(device);
+    let deadline = Instant::now() + timeout;
+    loop {
+        let screen = parse_screen(&device.dump_ui_xml()?)?;
+        if let Some(found) = check(&screen)? {
+            return Ok(Some(found));
+        }
+        if Instant::now() >= deadline {
+            return Ok(None);
+        }
+        thread::sleep(Duration::from_millis(400));
+    }
+}
+
+/// A `Pick` copied out of the screen it was made on, which does not outlive one poll.
+struct Picked {
+    chosen: UiElement,
+    rule: PickRule,
+    matches: Vec<(UiElement, bool)>,
+}
+
+impl Picked {
+    fn from_pick(screen: &Screen, pick: &Pick) -> Self {
+        Picked {
+            chosen: screen.element(pick.chosen).clone(),
+            rule: pick.rule,
+            matches: pick
+                .matches
+                .iter()
+                .map(|&i| (screen.element(i).clone(), screen.is_covered(i)))
+                .collect(),
+        }
+    }
+}
+
 fn parse_coords(s: &str) -> Result<(u32, u32), PalpError> {
     let parts: Vec<&str> = s.split(',').collect();
     if parts.len() == 2 {
@@ -351,20 +428,6 @@ fn resolve_coordinates(device: &adb::Device, target: &str) -> Result<(u32, u32),
         target: target.to_string(),
         available,
     })
-}
-
-trait IfEmpty {
-    fn if_empty<'a>(&'a self, fallback: &'a str) -> &'a str;
-}
-
-impl IfEmpty for String {
-    fn if_empty<'a>(&'a self, fallback: &'a str) -> &'a str {
-        if self.is_empty() {
-            fallback
-        } else {
-            self.as_str()
-        }
-    }
 }
 
 fn generate_agent_guide() -> &'static str {
