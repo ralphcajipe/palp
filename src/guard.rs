@@ -22,7 +22,9 @@ impl<'a> AnimationGuard<'a> {
     pub fn acquire(device: &'a Device) -> Self {
         let original_animator = device.get_setting("global", "animator_duration_scale").ok();
         let original_window = device.get_setting("global", "window_animation_scale").ok();
-        let original_transition = device.get_setting("global", "transition_animation_scale").ok();
+        let original_transition = device
+            .get_setting("global", "transition_animation_scale")
+            .ok();
 
         // Temporarily set scales to 0 for instant uiautomator capture
         let _ = device.set_setting("global", "animator_duration_scale", "0");
@@ -42,13 +44,19 @@ impl<'a> Drop for AnimationGuard<'a> {
     fn drop(&mut self) {
         // Unconditionally restore original animation settings
         if let Some(ref val) = self.original_animator {
-            let _ = self.device.set_setting("global", "animator_duration_scale", val);
+            let _ = self
+                .device
+                .set_setting("global", "animator_duration_scale", val);
         }
         if let Some(ref val) = self.original_window {
-            let _ = self.device.set_setting("global", "window_animation_scale", val);
+            let _ = self
+                .device
+                .set_setting("global", "window_animation_scale", val);
         }
         if let Some(ref val) = self.original_transition {
-            let _ = self.device.set_setting("global", "transition_animation_scale", val);
+            let _ = self
+                .device
+                .set_setting("global", "transition_animation_scale", val);
         }
     }
 }

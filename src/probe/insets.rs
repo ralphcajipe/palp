@@ -19,7 +19,8 @@ impl DeviceMetrics {
 
     /// Safe viewport height (excluding top status bar and bottom gesture bar).
     pub fn content_height(&self) -> u32 {
-        self.height.saturating_sub(self.status_bar_height + self.navigation_bar_height)
+        self.height
+            .saturating_sub(self.status_bar_height + self.navigation_bar_height)
     }
 
     /// Top coordinate where app content begins.

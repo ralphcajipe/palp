@@ -42,14 +42,31 @@ fn run(cli: Cli) -> Result<(), PalpError> {
             let device = select_device(target)?;
             let metrics = probe_device(&device)?;
 
-            println!("{}", "📱 Probed Device Display Specifications".cyan().bold());
+            println!(
+                "{}",
+                "📱 Probed Device Display Specifications".cyan().bold()
+            );
             println!("-----------------------------------------");
-            println!("• Device:             {} ({})", device.serial.bold(), device.model);
-            println!("• Physical Size:      {}x{} pixels", metrics.width, metrics.height);
-            println!("• Density:            {} DPI ({}x scale)", metrics.density_dpi, metrics.scale_factor);
+            println!(
+                "• Device:             {} ({})",
+                device.serial.bold(),
+                device.model
+            );
+            println!(
+                "• Physical Size:      {}x{} pixels",
+                metrics.width, metrics.height
+            );
+            println!(
+                "• Density:            {} DPI ({}x scale)",
+                metrics.density_dpi, metrics.scale_factor
+            );
             println!("• Status Bar (Top):   {} px", metrics.status_bar_height);
             println!("• Gesture Bar (Btm):  {} px", metrics.navigation_bar_height);
-            println!("• Safe App Viewport:  {}x{} px", metrics.content_width(), metrics.content_height());
+            println!(
+                "• Safe App Viewport:  {}x{} px",
+                metrics.content_width(),
+                metrics.content_height()
+            );
 
             if args.save {
                 let mut cfg = PalpConfig::load();
@@ -59,7 +76,11 @@ fn run(cli: Cli) -> Result<(), PalpError> {
                     navigation_bar: metrics.navigation_bar_height,
                 });
                 let saved_path = cfg.save_to_cwd()?;
-                println!("\n{} Saved device profile to {}", "✓".green().bold(), saved_path.display());
+                println!(
+                    "\n{} Saved device profile to {}",
+                    "✓".green().bold(),
+                    saved_path.display()
+                );
             }
         }
 
@@ -101,7 +122,9 @@ fn run(cli: Cli) -> Result<(), PalpError> {
 
             println!(
                 "Found matching element: \"{}\" at [{},{}][{},{}]",
-                element.text.if_empty(element.content_desc.if_empty(element.resource_id.as_str())),
+                element
+                    .text
+                    .if_empty(element.content_desc.if_empty(element.resource_id.as_str())),
                 element.bounds.left,
                 element.bounds.top,
                 element.bounds.right,
@@ -109,7 +132,12 @@ fn run(cli: Cli) -> Result<(), PalpError> {
             );
 
             device.tap(cx, cy)?;
-            println!("{} Tapped center of element at ({}, {}).", "✓".green().bold(), cx, cy);
+            println!(
+                "{} Tapped center of element at ({}, {}).",
+                "✓".green().bold(),
+                cx,
+                cy
+            );
         }
 
         Commands::Type(args) => {
@@ -166,7 +194,10 @@ fn run(cli: Cli) -> Result<(), PalpError> {
                 }
             };
 
-            println!("👉 Swiping from ({}, {}) to ({}, {}) over {}ms...", x1, y1, x2, y2, args.duration);
+            println!(
+                "👉 Swiping from ({}, {}) to ({}, {}) over {}ms...",
+                x1, y1, x2, y2, args.duration
+            );
             device.swipe(x1, y1, x2, y2, args.duration)?;
             println!("{} Swiped successfully.", "✓".green().bold());
         }
@@ -243,11 +274,17 @@ fn run(cli: Cli) -> Result<(), PalpError> {
 fn parse_coords(s: &str) -> Result<(u32, u32), PalpError> {
     let parts: Vec<&str> = s.split(',').collect();
     if parts.len() == 2 {
-        if let (Ok(x), Ok(y)) = (parts[0].trim().parse::<u32>(), parts[1].trim().parse::<u32>()) {
+        if let (Ok(x), Ok(y)) = (
+            parts[0].trim().parse::<u32>(),
+            parts[1].trim().parse::<u32>(),
+        ) {
             return Ok((x, y));
         }
     }
-    Err(PalpError::AdbFailed(format!("Invalid coordinates '{}'. Expected x,y e.g. 500,1000", s)))
+    Err(PalpError::AdbFailed(format!(
+        "Invalid coordinates '{}'. Expected x,y e.g. 500,1000",
+        s
+    )))
 }
 
 /// Helper to ensure output filenames end in .png
@@ -292,9 +329,15 @@ fn resolve_coordinates(device: &adb::Device, target: &str) -> Result<(u32, u32),
     }
 
     let available = if config.targets.is_empty() {
-        "None registered yet. Define targets in .palprc.json or use 'palp tap-text \"Button\"'".to_string()
+        "None registered yet. Define targets in .palprc.json or use 'palp tap-text \"Button\"'"
+            .to_string()
     } else {
-        config.targets.keys().map(|k| format!(" - {}", k)).collect::<Vec<_>>().join("\n")
+        config
+            .targets
+            .keys()
+            .map(|k| format!(" - {}", k))
+            .collect::<Vec<_>>()
+            .join("\n")
     };
 
     Err(PalpError::UnknownTarget {

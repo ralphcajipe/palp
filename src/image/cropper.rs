@@ -1,7 +1,7 @@
-use std::path::Path;
-use image::{imageops, GenericImageView, ImageFormat};
 use crate::error::PalpError;
 use crate::probe::DeviceMetrics;
+use image::{imageops, GenericImageView, ImageFormat};
+use std::path::Path;
 
 /// Crops phone status bar and bottom navigation bar in host memory using SIMD.
 /// Zero disk writes to the phone or intermediate uncropped temp files.

@@ -1,8 +1,8 @@
 pub mod insets;
 
-pub use insets::DeviceMetrics;
 use crate::adb::Device;
 use crate::error::PalpError;
+pub use insets::DeviceMetrics;
 
 /// Probes a connected device for physical screen dimensions and system bar insets.
 pub fn probe_device(device: &Device) -> Result<DeviceMetrics, PalpError> {
@@ -17,7 +17,8 @@ pub fn probe_device(device: &Device) -> Result<DeviceMetrics, PalpError> {
 
     // 3. System insets (status bar & navigation bar)
     let dumpsys_out = device.shell("dumpsys window displays").unwrap_or_default();
-    let (status_bar_height, navigation_bar_height) = parse_insets(&dumpsys_out, height, scale_factor);
+    let (status_bar_height, navigation_bar_height) =
+        parse_insets(&dumpsys_out, height, scale_factor);
 
     Ok(DeviceMetrics {
         width,

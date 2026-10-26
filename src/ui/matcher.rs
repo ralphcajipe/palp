@@ -1,6 +1,6 @@
+use crate::error::PalpError;
 use quick_xml::events::Event;
 use quick_xml::reader::Reader;
-use crate::error::PalpError;
 
 #[derive(Debug, Clone)]
 pub struct Rect {
@@ -63,26 +63,35 @@ pub fn find_element_by_text(xml: &str, query: &str) -> Result<UiElement, PalpErr
     let query_lower = query.trim().to_lowercase();
 
     // 1. Exact match on text
-    if let Some(el) = elements.iter().find(|e| e.text.trim().to_lowercase() == query_lower) {
+    if let Some(el) = elements
+        .iter()
+        .find(|e| e.text.trim().to_lowercase() == query_lower)
+    {
         return Ok(el.clone());
     }
 
     // 2. Exact match on content description (accessibility label)
-    if let Some(el) = elements.iter().find(|e| e.content_desc.trim().to_lowercase() == query_lower) {
+    if let Some(el) = elements
+        .iter()
+        .find(|e| e.content_desc.trim().to_lowercase() == query_lower)
+    {
         return Ok(el.clone());
     }
 
     // 3. Exact match or ending with resource-id (e.g. testID)
     if let Some(el) = elements.iter().find(|e| {
         let res = e.resource_id.trim().to_lowercase();
-        res == query_lower || res.ends_with(&format!("/{}", query_lower)) || res.ends_with(&format!(":id/{}", query_lower))
+        res == query_lower
+            || res.ends_with(&format!("/{}", query_lower))
+            || res.ends_with(&format!(":id/{}", query_lower))
     }) {
         return Ok(el.clone());
     }
 
     // 4. Substring containment match on text or content description
     if let Some(el) = elements.iter().find(|e| {
-        e.text.to_lowercase().contains(&query_lower) || e.content_desc.to_lowercase().contains(&query_lower)
+        e.text.to_lowercase().contains(&query_lower)
+            || e.content_desc.to_lowercase().contains(&query_lower)
     }) {
         return Ok(el.clone());
     }

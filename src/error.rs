@@ -11,10 +11,14 @@ pub enum PalpError {
     #[error("Found multiple connected devices ({count}). Please specify one with --device <ID>.\nAvailable devices:\n{devices}")]
     MultipleDevices { count: usize, devices: String },
 
-    #[error("Device '{0}' is unauthorized. Please unlock your phone and tap 'Allow USB Debugging'.")]
+    #[error(
+        "Device '{0}' is unauthorized. Please unlock your phone and tap 'Allow USB Debugging'."
+    )]
     DeviceUnauthorized(String),
 
-    #[error("Device screen appears to be turned off or locked. Please unlock the screen to continue.")]
+    #[error(
+        "Device screen appears to be turned off or locked. Please unlock the screen to continue."
+    )]
     ScreenLocked,
 
     #[error("Could not find any visible text or button matching '{0}' on the current screen.")]
@@ -26,7 +30,9 @@ pub enum PalpError {
     #[error("ADB command failed: {0}")]
     AdbFailed(String),
 
-    #[error("Operation timed out after {0} seconds. The phone or ADB may be busy or disconnected.")]
+    #[error(
+        "Operation timed out after {0} seconds. The phone or ADB may be busy or disconnected."
+    )]
     Timeout(u64),
 
     #[error("Failed to read or write image: {0}")]

@@ -1,12 +1,15 @@
-use colored::*;
 use crate::adb::{find_adb, list_devices, select_device};
 use crate::config::PalpConfig;
 use crate::error::PalpError;
 use crate::probe::probe_device;
+use colored::*;
 
 /// Runs a friendly diagnostic check of the development environment and connected phone.
 pub fn run_doctor(target_device: Option<&str>) -> Result<(), PalpError> {
-    println!("{}", "🩺 palp Doctor - Diagnostic Health Check".bold().cyan());
+    println!(
+        "{}",
+        "🩺 palp Doctor - Diagnostic Health Check".bold().cyan()
+    );
     println!("{}", "=========================================".cyan());
 
     // 1. Check ADB
@@ -39,7 +42,9 @@ pub fn run_doctor(target_device: Option<&str>) -> Result<(), PalpError> {
         println!("{}", "✗ NO DEVICES FOUND".red().bold());
         println!("\n{}", "Advice:".yellow().bold());
         println!("1. Connect your Android phone via USB or launch an Android emulator.");
-        println!("2. On your physical phone, enable Developer Options and turn on 'USB Debugging'.");
+        println!(
+            "2. On your physical phone, enable Developer Options and turn on 'USB Debugging'."
+        );
         return Ok(());
     }
 
@@ -50,8 +55,18 @@ pub fn run_doctor(target_device: Option<&str>) -> Result<(), PalpError> {
         } else {
             "Unauthorized / Offline".red().bold()
         };
-        let kind = if d.is_emulator { "Emulator" } else { "Physical Phone" };
-        println!("   • {} [{}] - {} ({})", d.serial.cyan(), kind, d.model, auth_badge);
+        let kind = if d.is_emulator {
+            "Emulator"
+        } else {
+            "Physical Phone"
+        };
+        println!(
+            "   • {} [{}] - {} ({})",
+            d.serial.cyan(),
+            kind,
+            d.model,
+            auth_badge
+        );
     }
 
     // 3. Select active device
@@ -63,17 +78,27 @@ pub fn run_doctor(target_device: Option<&str>) -> Result<(), PalpError> {
         }
     };
 
-    println!("\n{} Active Device: {} ({})", "📱".green(), active_device.serial.bold(), active_device.model);
+    println!(
+        "\n{} Active Device: {} ({})",
+        "📱".green(),
+        active_device.serial.bold(),
+        active_device.model
+    );
 
     // 4. Check Screen & Power
     print!("Checking screen display state... ");
-    let power_state = active_device.shell("dumpsys power | grep -i 'mHoldingDisplaySuspendBlocker\\|mWakefulness'").unwrap_or_default();
-    let is_awake = power_state.contains("mHoldingDisplaySuspendBlocker=true") || power_state.to_lowercase().contains("awake");
+    let power_state = active_device
+        .shell("dumpsys power | grep -i 'mHoldingDisplaySuspendBlocker\\|mWakefulness'")
+        .unwrap_or_default();
+    let is_awake = power_state.contains("mHoldingDisplaySuspendBlocker=true")
+        || power_state.to_lowercase().contains("awake");
     if is_awake {
         println!("{}", "✓ AWAKE & READY".green().bold());
     } else {
         println!("{}", "! SCREEN OFF OR SLEEPING".yellow().bold());
-        println!("   Advice: Press power button on your phone or run `palp press power` to wake it.");
+        println!(
+            "   Advice: Press power button on your phone or run `palp press power` to wake it."
+        );
     }
 
     // 5. Check Display Dimensions & Insets
@@ -81,12 +106,23 @@ pub fn run_doctor(target_device: Option<&str>) -> Result<(), PalpError> {
     match probe_device(&active_device) {
         Ok(metrics) => {
             println!("{}", "✓ SUCCESS".green().bold());
-            println!("   • Resolution: {}x{} @ {} DPI ({}x scale)",
+            println!(
+                "   • Resolution: {}x{} @ {} DPI ({}x scale)",
                 metrics.width, metrics.height, metrics.density_dpi, metrics.scale_factor
             );
-            println!("   • Safe Viewport: {}x{} px", metrics.content_width(), metrics.content_height());
-            println!("   • Status Bar Inset: {} px (top cut)", metrics.status_bar_height);
-            println!("   • Gesture Bar Inset: {} px (bottom cut)", metrics.navigation_bar_height);
+            println!(
+                "   • Safe Viewport: {}x{} px",
+                metrics.content_width(),
+                metrics.content_height()
+            );
+            println!(
+                "   • Status Bar Inset: {} px (top cut)",
+                metrics.status_bar_height
+            );
+            println!(
+                "   • Gesture Bar Inset: {} px (bottom cut)",
+                metrics.navigation_bar_height
+            );
         }
         Err(e) => {
             println!("{} ({})", "! WARNING".yellow().bold(), e);
@@ -99,12 +135,20 @@ pub fn run_doctor(target_device: Option<&str>) -> Result<(), PalpError> {
     if config.targets.is_empty() {
         println!("   • No custom target shortcuts defined yet. You can tap by text: `palp tap-text \"Button\"`");
     } else {
-        println!("   • {} target shortcut(s) registered:", config.targets.len());
+        println!(
+            "   • {} target shortcut(s) registered:",
+            config.targets.len()
+        );
         for (name, coords) in &config.targets {
             println!("     - {}: [{}, {}]", name.cyan(), coords.0, coords.1);
         }
     }
 
-    println!("\n{}", "🎉 All systems operational! palp is ready for agentic & developer navigation.".green().bold());
+    println!(
+        "\n{}",
+        "🎉 All systems operational! palp is ready for agentic & developer navigation."
+            .green()
+            .bold()
+    );
     Ok(())
 }

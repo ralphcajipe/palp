@@ -1,10 +1,10 @@
 pub mod device;
 
+use crate::error::PalpError;
 pub use device::Device;
 use std::env;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use crate::error::PalpError;
 
 /// Finds the ADB executable on the host system.
 pub fn find_adb() -> Result<PathBuf, PalpError> {
@@ -85,7 +85,9 @@ pub fn list_devices(adb_path: &Path) -> Result<Vec<Device>, PalpError> {
             }
         }
 
-        let is_emulator = serial.starts_with("emulator-") || model.to_lowercase().contains("emulator") || model.to_lowercase().contains("gphone");
+        let is_emulator = serial.starts_with("emulator-")
+            || model.to_lowercase().contains("emulator")
+            || model.to_lowercase().contains("gphone");
 
         devices.push(Device {
             serial,
@@ -117,10 +119,17 @@ pub fn select_device(target: Option<&str>) -> Result<Device, PalpError> {
 
     // If target is explicitly specified
     if let Some(query) = target {
-        if let Some(d) = authorized.iter().find(|d| d.serial == query || d.model.eq_ignore_ascii_case(query)) {
+        if let Some(d) = authorized
+            .iter()
+            .find(|d| d.serial == query || d.model.eq_ignore_ascii_case(query))
+        {
             return Ok((*d).clone());
         }
-        let list_str = authorized.iter().map(|d| format!(" - {} ({})", d.serial, d.model)).collect::<Vec<_>>().join("\n");
+        let list_str = authorized
+            .iter()
+            .map(|d| format!(" - {} ({})", d.serial, d.model))
+            .collect::<Vec<_>>()
+            .join("\n");
         return Err(PalpError::UnknownTarget {
             target: query.to_string(),
             available: list_str,
@@ -133,13 +142,21 @@ pub fn select_device(target: Option<&str>) -> Result<Device, PalpError> {
     }
 
     // If multiple devices, prioritize a physical device if there is exactly 1 physical and others are emulators
-    let physical: Vec<&Device> = authorized.iter().filter(|d| !d.is_emulator).copied().collect();
+    let physical: Vec<&Device> = authorized
+        .iter()
+        .filter(|d| !d.is_emulator)
+        .copied()
+        .collect();
     if physical.len() == 1 {
         return Ok(physical[0].clone());
     }
 
     // Otherwise, request user specification
-    let list_str = authorized.iter().map(|d| format!(" - {} ({})", d.serial, d.model)).collect::<Vec<_>>().join("\n");
+    let list_str = authorized
+        .iter()
+        .map(|d| format!(" - {} ({})", d.serial, d.model))
+        .collect::<Vec<_>>()
+        .join("\n");
     Err(PalpError::MultipleDevices {
         count: authorized.len(),
         devices: list_str,

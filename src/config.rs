@@ -1,8 +1,8 @@
+use crate::error::PalpError;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
-use serde::{Deserialize, Serialize};
-use crate::error::PalpError;
 
 pub const CONFIG_FILE: &str = ".palprc.json";
 

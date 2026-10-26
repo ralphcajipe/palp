@@ -1,7 +1,7 @@
-use std::path::PathBuf;
-use std::process::{Command, Stdio};
 use crate::error::PalpError;
 use crate::guard::AnimationGuard;
+use std::path::PathBuf;
+use std::process::{Command, Stdio};
 
 /// Represents a connected Android device or emulator.
 #[derive(Debug, Clone)]
@@ -64,10 +64,10 @@ impl Device {
     /// Temporarily pauses animations via RAII guard to prevent idle state timeouts.
     pub fn dump_ui_xml(&self) -> Result<String, PalpError> {
         let _guard = AnimationGuard::acquire(self);
-        
+
         // Single atomic command: dump to tmp file, print to stdout, and clean up tmp file.
         let output = self.shell("uiautomator dump /data/local/tmp/uidump.xml >/dev/null 2>&1 && cat /data/local/tmp/uidump.xml && rm -f /data/local/tmp/uidump.xml")?;
-        
+
         if output.contains("<?xml") {
             // Find the start of the XML declaration in case of header noise
             if let Some(idx) = output.find("<?xml") {
@@ -76,7 +76,10 @@ impl Device {
                 Ok(output)
             }
         } else {
-            Err(PalpError::AdbFailed(format!("Failed to retrieve UI hierarchy:\n{}", output)))
+            Err(PalpError::AdbFailed(format!(
+                "Failed to retrieve UI hierarchy:\n{}",
+                output
+            )))
         }
     }
 
@@ -87,8 +90,18 @@ impl Device {
     }
 
     /// Swipe across the screen from (x1, y1) to (x2, y2) over duration_ms milliseconds.
-    pub fn swipe(&self, x1: u32, y1: u32, x2: u32, y2: u32, duration_ms: u32) -> Result<(), PalpError> {
-        self.shell(&format!("input swipe {} {} {} {} {}", x1, y1, x2, y2, duration_ms))?;
+    pub fn swipe(
+        &self,
+        x1: u32,
+        y1: u32,
+        x2: u32,
+        y2: u32,
+        duration_ms: u32,
+    ) -> Result<(), PalpError> {
+        self.shell(&format!(
+            "input swipe {} {} {} {} {}",
+            x1, y1, x2, y2, duration_ms
+        ))?;
         Ok(())
     }
 
