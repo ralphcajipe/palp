@@ -3,8 +3,78 @@ pub mod device;
 use crate::error::PalpError;
 pub use device::Device;
 use std::env;
+use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Output, Stdio};
+use std::sync::mpsc;
+use std::thread;
+use std::time::{Duration, Instant};
+
+/// Long enough for a slow `uiautomator dump` or a first `adb devices` that starts the
+/// adb server; short enough that an unplugged phone fails instead of hanging an agent.
+pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// The per-call limit: `PALP_TIMEOUT` in whole seconds, or the default.
+pub fn parse_timeout(value: Option<String>) -> Duration {
+    value
+        .and_then(|v| v.trim().parse::<u64>().ok())
+        .filter(|secs| *secs > 0)
+        .map(Duration::from_secs)
+        .unwrap_or(DEFAULT_TIMEOUT)
+}
+
+pub fn adb_timeout() -> Duration {
+    parse_timeout(env::var("PALP_TIMEOUT").ok())
+}
+
+/// Runs a command and kills it if it outlives `timeout`.
+///
+/// Output is read on two threads while waiting: a 2 MB screencap fills a pipe long before
+/// the process exits, and waiting first would deadlock. The readers are not joined after a
+/// timeout, since a process the command started could still hold the pipe open.
+pub fn run_with_timeout(mut cmd: Command, timeout: Duration) -> Result<Output, PalpError> {
+    cmd.stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = cmd.spawn()?;
+    let stdout = read_in_background(child.stdout.take());
+    let stderr = read_in_background(child.stderr.take());
+
+    let deadline = Instant::now() + timeout;
+    let timed_out = || PalpError::Timeout(timeout.as_secs());
+    let status = loop {
+        if let Some(status) = child.try_wait()? {
+            break status;
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(timed_out());
+        }
+        thread::sleep(Duration::from_millis(20));
+    };
+
+    let remaining = || deadline.saturating_duration_since(Instant::now());
+    let stdout = stdout.recv_timeout(remaining()).map_err(|_| timed_out())?;
+    let stderr = stderr.recv_timeout(remaining()).map_err(|_| timed_out())?;
+    Ok(Output {
+        status,
+        stdout,
+        stderr,
+    })
+}
+
+fn read_in_background<R: Read + Send + 'static>(pipe: Option<R>) -> mpsc::Receiver<Vec<u8>> {
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let mut buf = Vec::new();
+        if let Some(mut pipe) = pipe {
+            let _ = pipe.read_to_end(&mut buf);
+        }
+        let _ = tx.send(buf);
+    });
+    rx
+}
 
 /// The host operating system, which decides where Android Studio puts the SDK.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -118,7 +188,9 @@ pub fn find_adb() -> Result<AdbLocation, PalpError> {
             }
             AdbCandidate::OnPath => {
                 let exe = os.adb_exe();
-                if let Ok(output) = Command::new(exe).arg("version").output() {
+                let mut version = Command::new(exe);
+                version.arg("version");
+                if let Ok(output) = run_with_timeout(version, Duration::from_secs(10)) {
                     if output.status.success() {
                         return Ok(AdbLocation {
                             path: PathBuf::from(exe),
@@ -135,11 +207,9 @@ pub fn find_adb() -> Result<AdbLocation, PalpError> {
 
 /// Enumerates connected devices via `adb devices -l`.
 pub fn list_devices(adb_path: &Path) -> Result<Vec<Device>, PalpError> {
-    let output = Command::new(adb_path)
-        .arg("devices")
-        .arg("-l")
-        .output()
-        .map_err(PalpError::Io)?;
+    let mut devices_cmd = Command::new(adb_path);
+    devices_cmd.arg("devices").arg("-l");
+    let output = run_with_timeout(devices_cmd, adb_timeout())?;
 
     if !output.status.success() {
         let err = String::from_utf8_lossy(&output.stderr);
@@ -332,6 +402,47 @@ mod tests {
                 .join("platform-tools")
                 .join("adb.exe")
         ));
+    }
+
+    #[test]
+    fn palp_timeout_overrides_the_default_only_with_a_positive_number() {
+        assert_eq!(parse_timeout(None), DEFAULT_TIMEOUT);
+        assert_eq!(parse_timeout(Some("5".into())), Duration::from_secs(5));
+        assert_eq!(parse_timeout(Some(" 90 ".into())), Duration::from_secs(90));
+        assert_eq!(parse_timeout(Some("0".into())), DEFAULT_TIMEOUT);
+        assert_eq!(parse_timeout(Some("soon".into())), DEFAULT_TIMEOUT);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_hung_command_is_stopped_at_the_timeout() {
+        let mut sleep = Command::new("sleep");
+        sleep.arg("5");
+        let started = std::time::Instant::now();
+        let result = run_with_timeout(sleep, Duration::from_secs(1));
+        assert!(matches!(result, Err(PalpError::Timeout(1))));
+        assert!(started.elapsed() < Duration::from_secs(3));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_finished_command_returns_its_output() {
+        let mut echo = Command::new("echo");
+        echo.arg("hi");
+        let out = run_with_timeout(echo, Duration::from_secs(5)).unwrap();
+        assert!(out.status.success());
+        assert_eq!(out.stdout, b"hi\n");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn output_bigger_than_a_pipe_buffer_does_not_stall() {
+        let mut big = Command::new("/bin/sh");
+        big.arg("-c")
+            .arg("head -c 3000000 /dev/zero; echo done >&2");
+        let out = run_with_timeout(big, Duration::from_secs(10)).unwrap();
+        assert_eq!(out.stdout.len(), 3_000_000);
+        assert_eq!(out.stderr, b"done\n");
     }
 
     #[test]

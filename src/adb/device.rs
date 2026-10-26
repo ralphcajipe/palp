@@ -1,7 +1,9 @@
 use crate::error::PalpError;
 use crate::guard::AnimationGuard;
 use std::path::PathBuf;
-use std::process::{Command, Stdio};
+use std::process::Command;
+
+use super::{adb_timeout, run_with_timeout};
 
 /// Represents a connected Android device or emulator.
 #[derive(Debug, Clone)]
@@ -21,10 +23,7 @@ impl Device {
         for arg in args {
             cmd.arg(arg);
         }
-        cmd.stdout(Stdio::piped());
-        cmd.stderr(Stdio::piped());
-
-        let output = cmd.output().map_err(PalpError::Io)?;
+        let output = run_with_timeout(cmd, adb_timeout())?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(PalpError::AdbFailed(stderr.trim().to_string()));
