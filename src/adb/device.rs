@@ -41,12 +41,8 @@ impl Device {
 
     /// Read a device setting (system, secure, or global).
     pub fn get_setting(&self, namespace: &str, key: &str) -> Result<String, PalpError> {
-        let res = self.shell(&format!("settings get {} {}", namespace, key))?;
-        if res == "null" || res.is_empty() {
-            Ok("1.0".to_string())
-        } else {
-            Ok(res)
-        }
+        // Raw on purpose: "null" (never set) must be told apart from a value to restore it.
+        self.shell(&format!("settings get {} {}", namespace, key))
     }
 
     /// Write a device setting (system, secure, or global).

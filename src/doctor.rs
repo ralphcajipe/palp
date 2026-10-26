@@ -1,6 +1,7 @@
 use crate::adb::{find_adb, list_devices, select_device};
 use crate::config::PalpConfig;
 use crate::error::PalpError;
+use crate::guard::{heal_leftover, Leftover};
 use crate::probe::probe_device;
 use colored::*;
 
@@ -89,6 +90,23 @@ pub fn run_doctor(target_device: Option<&str>) -> Result<(), PalpError> {
         active_device.serial.bold(),
         active_device.model
     );
+
+    print!("Checking animation settings... ");
+    match heal_leftover(&active_device) {
+        Leftover::None => println!("{}", "✓ AS THE USER SET THEM".green().bold()),
+        Leftover::Restored => println!(
+            "{} (a stopped palp run had left them off)",
+            "✓ RESTORED".green().bold()
+        ),
+        Leftover::Stale => println!(
+            "{} (removed an outdated palp state file)",
+            "✓ AS THE USER SET THEM".green().bold()
+        ),
+        Leftover::RestoreFailed => println!(
+            "{} a stopped palp run left animations off and they could not be restored yet; run `palp doctor` again",
+            "!".yellow().bold()
+        ),
+    }
 
     // 4. Check Screen & Power
     print!("Checking screen display state... ");

@@ -22,6 +22,13 @@ use probe::probe_device;
 use ui::find_element_by_text;
 
 fn main() {
+    // Ctrl+C, SIGTERM and SIGHUP would otherwise end the process without running Drop and
+    // leave the phone's animations switched off.
+    let _ = ctrlc::set_handler(|| {
+        guard::restore_pending();
+        std::process::exit(130);
+    });
+
     let cli = Cli::parse();
 
     if let Err(err) = run(cli) {
