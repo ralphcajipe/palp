@@ -559,13 +559,23 @@ This project uses `palp` to let AI coding assistants (**Google Antigravity**, **
    palp press enter
    ```
 
-5. **Tap Relative Screen Positions:**
+5. **Wait, Read and Open (no screenshot needed):**
+   ```bash
+   palp launch com.example.app
+   palp wait-text "Welcome" --timeout 30
+   palp texts                 # every label on screen with where to tap it
+   palp tap-field             # first text field from the top (fields often have no label)
+   palp snap s.png --width 540
+   ```
+   When `tap-text` finds several matches it lists them; use `--nth N` to pick another.
+
+6. **Tap Relative Screen Positions:**
    ```bash
    palp tap 0.5,0.5      # Center of screen
    palp tap 0.5,0.2      # Top header
    ```
 
-6. **Swipe Gestures (Carousels & Scrolling):**
+7. **Swipe Gestures (Carousels & Scrolling):**
    ```bash
    palp swipe left       # Next slide / scroll right
    palp swipe right      # Previous slide / scroll left

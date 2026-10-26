@@ -59,11 +59,11 @@ palp snap checkout_screen.png
 
 | Dependability Principle | How `palp` Protects Your Hardware |
 | :--- | :--- |
-| **Fail-Safe Restoration** | Modern app animations freeze standard tools (`uiautomator dump`). `palp` temporarily pauses animations to read the screen, and uses a Rust **RAII Drop guard** to guarantee original settings are 100% restored, even if the command is interrupted or cancelled (`Ctrl+C`). |
+| **Fail-Safe Restoration** | Modern app animations freeze standard tools (`uiautomator dump`). `palp` pauses animations while it reads the screen, after saving your own values in memory and in a per-user state file. They come back when the command ends, on Ctrl+C or termination, after a crash, and even after a hard kill: the next `palp` command that reads the screen, or `palp doctor`, finds the file and puts them back. |
 | **Zero Disk Clutter** | Screencaps are streamed directly into computer memory. Status bars and gesture navigation bars are sliced away in RAM using SIMD. **Zero temporary image files are ever written to your phone's SD card.** |
 | **100% Privacy** | Completely offline. Zero cloud calls, zero analytics, zero external network traffic. Screenshots and device data never leave your local machine. |
-| **Shell Sanitization** | All inputs (e.g. `palp type`) are strictly escaped to prevent unintended shell execution or injection on the device. |
-| **Non-Hanging Timeouts** | Bounded timeouts prevent deadlocks if a device is unplugged mid-operation. |
+| **Shell Sanitization** | Typed text reaches the phone as one single-quoted word, so `&`, `(`, `'`, backticks and `$( )` arrive literally and never run. Key names and package names are checked before they reach the phone's shell, and values read back from the state file must be plain numbers. |
+| **Non-Hanging Timeouts** | Every adb call is stopped after 30 seconds (set `PALP_TIMEOUT` to change it), so an unplugged phone gives a clear error instead of hanging you or your agent. |
 
 ---
 
@@ -75,6 +75,14 @@ Install directly via Cargo:
 cargo install palp
 ```
 
+`palp` needs Android's `adb`, which comes with Android Studio's SDK platform-tools. It looks in this order and uses the first it finds:
+1. `PALP_ADB` (the full path to adb)
+2. `ANDROID_HOME`, then `ANDROID_SDK_ROOT`
+3. `adb` on your `PATH`
+4. Android Studio's default SDK folder: `~/Library/Android/sdk` on macOS, `~/Android/Sdk` on Linux, `%LOCALAPPDATA%\Android\Sdk` on Windows
+
+So with Android Studio installed, no setup is needed. `palp doctor` says which one it used.
+
 ### 1. Verify your setup
 Run `palp doctor` to check ADB connection, phone authorization, and display metrics:
 ```bash
@@ -84,11 +92,13 @@ Output:
 ```
 🩺 palp Doctor - Diagnostic Health Check
 =========================================
-Checking Android Debug Bridge (ADB)... ✓ FOUND (platform-tools\adb.exe)
+Checking Android Debug Bridge (ADB)... ✓ FOUND (/Users/you/Library/Android/sdk/platform-tools/adb, via Android Studio's default SDK folder)
 Scanning for connected devices... ✓ CONNECTED (found 1)
-   • 00170155D000432 [Physical Phone] - Nothing Phone (3a) Pro (Authorized)
+   • 00170155D000432 [Physical Phone] - A059P (Authorized)
 
-📱 Active Device: 00170155D000432
+📱 Active Device: 00170155D000432 (A059P)
+Checking animation settings... ✓ AS THE USER SET THEM
+Checking screen display state... ✓ AWAKE & READY
 Probing screen resolution & insets... ✓ SUCCESS
    • Resolution: 1080x2392 @ 420 DPI (2.625x scale)
    • Safe Viewport: 1080x2203 px
@@ -102,6 +112,7 @@ Probing screen resolution & insets... ✓ SUCCESS
 Takes a screenshot and automatically strips out the status bar (battery, wifi, clock, personal notifications) and bottom gesture pill:
 ```bash
 palp snap preview.png
+palp snap preview.png --width 540   # half size: about 100 KB instead of 1.8 MB, cheaper for an AI to look at
 ```
 
 ### 3. Tap Elements by Visible Text
@@ -109,6 +120,17 @@ Finds text, accessibility labels, or testIDs on screen and taps the exact center
 ```bash
 palp tap-text "Log In"
 palp tap-text "Submit Order"
+```
+
+When the same words appear more than once, `palp` taps the one you can actually reach and tells you which it chose:
+- Anything under a dialog, sheet or bottom bar is skipped, because a tap there would land on whatever covers it.
+- A tappable element beats plain text with the same words (the **Settings** tab, not a page titled Settings).
+- Otherwise the first one from the top wins.
+
+```bash
+palp tap-text "Settings" --nth 2       # the second match from the top, whatever the rules say
+palp tap-text "Save" --exact           # whole-text matches only, not "Save draft"
+palp tap-text "Continue" --timeout 15  # keep looking while the screen loads (default 5 s; 0 = look once)
 ```
 
 ### 4. Tap Relative Positions
@@ -124,6 +146,14 @@ palp type "hello@example.com"
 palp press enter
 palp press back
 palp press home
+palp press KEYCODE_VOLUME_UP   # any KEYCODE_ name or number also works
+```
+Text is typed exactly as given, symbols included. Two limits come from Android's `input text`: a literal `%s` is typed as a space, and characters outside your keyboard layout (such as emoji) may not type.
+
+Many text fields, especially in web views, carry no label `palp` can see. Tap them by position in the list instead:
+```bash
+palp tap-field        # the first text field from the top
+palp tap-field 2      # the second
 ```
 
 ### 6. Swipe Gestures (Carousels & Scrolling)
@@ -134,12 +164,28 @@ palp swipe up         # Scroll down
 palp swipe down       # Scroll up
 ```
 
-### 7. Set Up for AI Coding Assistants (One-Step Init)
+### 7. Open Apps, Wait, and Read the Screen as Text
+```bash
+palp launch com.example.app               # open an app, as tapping its icon would
+palp wait-text "Welcome" --timeout 30     # returns as soon as it appears; fails clearly if it never does
+palp wait-text "Loading" --gone           # wait for something to disappear
+palp texts                                # what is on screen and where to tap it, no screenshot needed
+palp texts --json                         # the same, for scripts
+```
+`palp texts` prints one line per element, for example `(973, 2244) "Settings" [tap]`. `[tap]` marks tappable elements, `[field]` text fields, and `[covered]` elements under a dialog or bar.
+
+### 8. Set Up for AI Coding Assistants (One-Step Init)
 In your mobile project root, run:
 ```bash
 palp init
 ```
 This generates `AGENT_DEVICE.md`, auto-wires your AI agent rules (`AGENTS.md`, `CLAUDE.md`, `.cursorrules`), and probes your connected phone to create `.palprc.json`. From then on, your AI agent automatically uses `palp` whenever you prompt it to test or navigate your phone.
+
+---
+
+## 🧪 Tested On
+
+macOS with a physical Android phone. The timeout and Ctrl+C handling use only the Rust standard library and the `ctrlc` crate and are written for Linux and Windows too, but have not been tested there yet.
 
 ---
 
