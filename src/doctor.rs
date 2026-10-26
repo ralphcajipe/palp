@@ -15,9 +15,14 @@ pub fn run_doctor(target_device: Option<&str>) -> Result<(), PalpError> {
     // 1. Check ADB
     print!("Checking Android Debug Bridge (ADB)... ");
     let adb_path = match find_adb() {
-        Ok(path) => {
-            println!("{} ({})", "✓ FOUND".green().bold(), path.display());
-            path
+        Ok(adb) => {
+            println!(
+                "{} ({}, via {})",
+                "✓ FOUND".green().bold(),
+                adb.path.display(),
+                adb.source
+            );
+            adb.path
         }
         Err(_) => {
             println!("{}", "✗ NOT FOUND".red().bold());
