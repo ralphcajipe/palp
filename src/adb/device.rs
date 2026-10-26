@@ -107,35 +107,97 @@ impl Device {
 
     /// Type text into the active input field with shell escaping.
     pub fn input_text(&self, text: &str) -> Result<(), PalpError> {
-        // Android adb input text requires replacing space with %s
-        let sanitized = text
-            .replace(' ', "%s")
-            .replace('&', "\\&")
-            .replace('<', "\\<")
-            .replace('>', "\\>")
-            .replace('(', "\\(")
-            .replace(')', "\\)")
-            .replace('$', "\\$")
-            .replace('"', "\\\"")
-            .replace('\'', "\\'");
-
-        self.shell(&format!("input text \"{}\"", sanitized))?;
+        self.shell(&format!("input text {}", quote_for_input_text(text)))?;
         Ok(())
     }
 
     /// Send hardware or navigation key event (e.g. BACK, HOME, ENTER).
     pub fn keyevent(&self, key: &str) -> Result<(), PalpError> {
-        let binding = key.to_uppercase();
-        let key_code = match binding.as_str() {
-            "BACK" => "KEYCODE_BACK",
-            "HOME" => "KEYCODE_HOME",
-            "ENTER" => "KEYCODE_ENTER",
-            "TAB" => "KEYCODE_TAB",
-            "DEL" | "BACKSPACE" => "KEYCODE_DEL",
-            "POWER" => "KEYCODE_POWER",
-            other => other,
-        };
-        self.shell(&format!("input keyevent {}", key_code))?;
+        self.shell(&format!("input keyevent {}", key_code(key)?))?;
         Ok(())
+    }
+}
+
+/// Quotes text for `input text` so the phone's shell hands it over exactly as typed.
+///
+/// Escaping inside double quotes let backticks run commands and typed a stray backslash
+/// before `& ( ) < > '`. Inside single quotes nothing is special except the quote itself.
+/// Spaces become `%s` because `input text` turns `%s` back into a space, so a literal
+/// `%s` cannot be typed.
+pub fn quote_for_input_text(text: &str) -> String {
+    format!("'{}'", text.replace('\'', r"'\''").replace(' ', "%s"))
+}
+
+/// The keycode `input keyevent` should receive for a key name, alias or number.
+///
+/// The result reaches the phone's shell unquoted, so anything other than letters, digits and
+/// `_` is refused rather than passed through.
+pub fn key_code(key: &str) -> Result<String, PalpError> {
+    let upper = key.trim().to_uppercase();
+    let code = match upper.as_str() {
+        "BACK" => "KEYCODE_BACK",
+        "HOME" => "KEYCODE_HOME",
+        "ENTER" => "KEYCODE_ENTER",
+        "TAB" => "KEYCODE_TAB",
+        "DEL" | "BACKSPACE" => "KEYCODE_DEL",
+        "POWER" => "KEYCODE_POWER",
+        other => other,
+    };
+    if is_plain_word(code, &['_']) {
+        Ok(code.to_string())
+    } else {
+        Err(PalpError::InvalidInput(format!(
+            "'{key}' is not a key name. Use back, home, enter, tab, del, power, a KEYCODE_ name or a number."
+        )))
+    }
+}
+
+/// True when `s` is non-empty ASCII letters and digits plus the `extra` characters, so it is
+/// one harmless word for the phone's shell.
+pub(crate) fn is_plain_word(s: &str, extra: &[char]) -> bool {
+    !s.is_empty()
+        && s.chars()
+            .all(|c| c.is_ascii_alphanumeric() || extra.contains(&c))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const AWKWARD: &str = r#"Tom & Jerry (x) it's `id` $(y) \ ; "q" <b>"#;
+
+    #[test]
+    fn typed_text_is_one_single_quoted_word() {
+        assert_eq!(
+            quote_for_input_text(AWKWARD),
+            r#"'Tom%s&%sJerry%s(x)%sit'\''s%s`id`%s$(y)%s\%s;%s"q"%s<b>'"#
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_posix_shell_hands_typed_text_over_untouched() {
+        let quoted = quote_for_input_text(AWKWARD);
+        let out = std::process::Command::new("/bin/sh")
+            .arg("-c")
+            .arg(format!("printf %s {quoted}"))
+            .output()
+            .unwrap();
+        assert!(out.status.success());
+        assert_eq!(
+            String::from_utf8(out.stdout).unwrap(),
+            AWKWARD.replace(' ', "%s")
+        );
+    }
+
+    #[test]
+    fn key_names_map_to_keycodes_and_nothing_else_reaches_the_shell() {
+        assert_eq!(key_code("back").unwrap(), "KEYCODE_BACK");
+        assert_eq!(key_code(" Enter ").unwrap(), "KEYCODE_ENTER");
+        assert_eq!(key_code("keycode_volume_up").unwrap(), "KEYCODE_VOLUME_UP");
+        assert_eq!(key_code("66").unwrap(), "66");
+        for bad in ["home; reboot", "$(id)", "", "a b", "`id`"] {
+            assert!(key_code(bad).is_err(), "{bad:?} should be refused");
+        }
     }
 }

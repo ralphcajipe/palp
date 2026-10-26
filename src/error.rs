@@ -27,6 +27,9 @@ pub enum PalpError {
     #[error("Unknown target '{target}'. Available targets in .palprc.json:\n{available}")]
     UnknownTarget { target: String, available: String },
 
+    #[error("{0}")]
+    InvalidInput(String),
+
     #[error("ADB command failed: {0}")]
     AdbFailed(String),
 
