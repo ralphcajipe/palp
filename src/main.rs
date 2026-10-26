@@ -22,7 +22,7 @@ use error::PalpError;
 use guard::AnimationGuard;
 use image::crop_and_save;
 use probe::probe_device;
-use ui::{parse_screen, pick, Pick, PickRule, Screen, UiElement};
+use ui::{describe_line, parse_screen, pick, Pick, PickRule, Screen, UiElement};
 
 fn main() {
     // Ctrl+C, SIGTERM and SIGHUP would otherwise end the process without running Drop and
@@ -180,6 +180,104 @@ fn run(cli: Cli) -> Result<(), PalpError> {
                 cx,
                 cy
             );
+        }
+
+        Commands::WaitText(args) => {
+            if args.text.trim().is_empty() {
+                return Err(PalpError::InvalidInput("Give the text to wait for.".into()));
+            }
+            let device = select_device(target)?;
+            let started = Instant::now();
+            let done = poll_screen(&device, Duration::from_secs(args.timeout), |screen| {
+                Ok((screen.has_match(&args.text, args.exact) != args.gone).then_some(()))
+            })?;
+            if done.is_none() {
+                let (text, secs) = (args.text.clone(), args.timeout);
+                return Err(if args.gone {
+                    PalpError::StillOnScreen { text, secs }
+                } else {
+                    PalpError::DidNotAppear { text, secs }
+                });
+            }
+            println!(
+                "{} '{}' {} ({:.1} s).",
+                "✓".green().bold(),
+                args.text,
+                if args.gone { "is gone" } else { "is on screen" },
+                started.elapsed().as_secs_f32()
+            );
+        }
+
+        Commands::Texts(args) => {
+            let device = select_device(target)?;
+            let lines = poll_screen(&device, Duration::ZERO, |screen| {
+                Ok(Some(
+                    screen
+                        .visible_texts()
+                        .into_iter()
+                        .map(|i| (screen.element(i).clone(), screen.is_covered(i)))
+                        .collect::<Vec<_>>(),
+                ))
+            })?
+            .unwrap_or_default();
+
+            if args.json {
+                let items: Vec<serde_json::Value> = lines
+                    .iter()
+                    .map(|(el, covered)| {
+                        let (x, y) = el.center();
+                        serde_json::json!({
+                            "x": x,
+                            "y": y,
+                            "label": el.label(),
+                            "text": el.text,
+                            "content_desc": el.content_desc,
+                            "resource_id": el.resource_id,
+                            "class": el.class,
+                            "tap": el.clickable,
+                            "field": el.is_field(),
+                            "covered": covered,
+                            "bounds": [el.bounds.left, el.bounds.top, el.bounds.right, el.bounds.bottom],
+                        })
+                    })
+                    .collect();
+                println!("{}", serde_json::to_string_pretty(&items)?);
+            } else {
+                for (el, covered) in &lines {
+                    println!("{}", describe_line(el, *covered));
+                }
+            }
+        }
+
+        Commands::TapField(args) => {
+            if args.n == 0 {
+                return Err(PalpError::InvalidInput("Fields are counted from 1.".into()));
+            }
+            let device = select_device(target)?;
+            let field = poll_screen(&device, Duration::from_secs(args.timeout), |screen| {
+                Ok(screen
+                    .fields()
+                    .get(args.n - 1)
+                    .map(|&i| screen.element(i).clone()))
+            })?
+            .ok_or_else(|| {
+                PalpError::InvalidInput(format!("Found no text field number {} on screen.", args.n))
+            })?;
+            let (x, y) = field.center();
+            device.tap(x, y)?;
+            println!(
+                "{} Tapped text field {} at ({}, {}).",
+                "✓".green().bold(),
+                args.n,
+                x,
+                y
+            );
+        }
+
+        Commands::Launch(args) => {
+            let device = select_device(target)?;
+            device.launch(&args.package)?;
+            println!("{} Opened {}.", "✓".green().bold(), args.package);
         }
 
         Commands::Type(args) => {

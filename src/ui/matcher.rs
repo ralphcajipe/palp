@@ -47,6 +47,18 @@ impl Rect {
     pub fn contains(&self, (x, y): (u32, u32)) -> bool {
         x >= self.left && x < self.right && y >= self.top && y < self.bottom
     }
+
+    /// The overlap of two rectangles, empty (zero area) when they do not meet.
+    pub fn intersect(&self, other: &Rect) -> Rect {
+        let left = self.left.max(other.left);
+        let top = self.top.max(other.top);
+        Rect {
+            left,
+            top,
+            right: self.right.min(other.right).max(left),
+            bottom: self.bottom.min(other.bottom).max(top),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -83,6 +95,9 @@ impl UiElement {
 pub struct Screen {
     elements: Vec<UiElement>,
     parents: Vec<Option<usize>>,
+    /// Each node's bounds cut to its containers: what it can actually cover. WebView dumps
+    /// report a scrolled list from the top of its dialog, past the box that clips it.
+    visible: Vec<Rect>,
 }
 
 impl Screen {
@@ -110,9 +125,9 @@ impl Screen {
     pub fn is_covered(&self, index: usize) -> bool {
         let center = self.elements[index].center();
         (index + 1..self.elements.len()).any(|later| {
-            let bounds = &self.elements[later].bounds;
-            bounds.has_area()
-                && bounds.contains(center)
+            let cover = &self.visible[later];
+            cover.has_area()
+                && cover.contains(center)
                 && !self.is_ancestor(later, index)
                 && !self.is_ancestor(index, later)
         })
@@ -144,6 +159,43 @@ impl Screen {
         Vec::new()
     }
 
+    /// What `palp texts` lists, from the top: on-screen nodes a person could name, plus every
+    /// text field, since fields usually carry no visible label in the dump. A node known only
+    /// by its ID is listed when it is tappable (a native icon button); otherwise it is a layout
+    /// container such as `android:id/content` and only noise.
+    pub fn visible_texts(&self) -> Vec<usize> {
+        let named = self
+            .candidates()
+            .filter(|&i| {
+                let e = &self.elements[i];
+                e.is_field()
+                    || !e.text.trim().is_empty()
+                    || !e.content_desc.trim().is_empty()
+                    || (e.clickable && !e.resource_id.trim().is_empty())
+            })
+            .collect();
+        self.in_reading_order(named)
+    }
+
+    /// Text fields from the top, leaving out any under a dialog unless all of them are.
+    pub fn fields(&self) -> Vec<usize> {
+        let all: Vec<usize> = self
+            .candidates()
+            .filter(|&i| self.elements[i].is_field())
+            .collect();
+        let uncovered: Vec<usize> = all
+            .iter()
+            .copied()
+            .filter(|&i| !self.is_covered(i))
+            .collect();
+        self.in_reading_order(if uncovered.is_empty() { all } else { uncovered })
+    }
+
+    /// Whether `query` is on screen, judged exactly as `tap-text` would find it.
+    pub fn has_match(&self, query: &str, exact: bool) -> bool {
+        !query.trim().is_empty() && !self.find_matches(query, exact).is_empty()
+    }
+
     /// Sorted the way a person reads the screen: top to bottom, then left to right.
     pub fn in_reading_order(&self, mut indexes: Vec<usize>) -> Vec<usize> {
         indexes.sort_by_key(|&i| {
@@ -152,6 +204,23 @@ impl Screen {
         });
         indexes
     }
+}
+
+/// One line of `palp texts`: where to tap, what it says, and `[tap]`, `[field]` and
+/// `[covered]` flags.
+pub fn describe_line(el: &UiElement, covered: bool) -> String {
+    let (x, y) = el.center();
+    let mut line = format!("({x}, {y}) \"{}\"", el.label());
+    if el.clickable {
+        line.push_str(" [tap]");
+    }
+    if el.is_field() {
+        line.push_str(" [field]");
+    }
+    if covered {
+        line.push_str(" [covered]");
+    }
+    line
 }
 
 /// Why `pick` chose the element it did, for the message shown when there were several.
@@ -295,7 +364,21 @@ pub fn parse_screen(xml: &str) -> Result<Screen, PalpError> {
         }
     }
 
-    Ok(Screen { elements, parents })
+    // Parents come before their children in a dump, so one pass sees each parent first.
+    let mut visible: Vec<Rect> = Vec::with_capacity(elements.len());
+    for (i, el) in elements.iter().enumerate() {
+        let clipped = match parents[i] {
+            Some(parent) => el.bounds.intersect(&visible[parent]),
+            None => el.bounds.clone(),
+        };
+        visible.push(clipped);
+    }
+
+    Ok(Screen {
+        elements,
+        parents,
+        visible,
+    })
 }
 
 fn element_from(e: &BytesStart) -> UiElement {
@@ -472,6 +555,106 @@ mod tests {
             pick(&screen, "  ", false, None),
             Err(PalpError::InvalidInput(_))
         ));
+    }
+
+    #[test]
+    fn a_screen_reads_as_lines_of_text_with_where_to_tap() {
+        let screen = parse_screen(SETTINGS).unwrap();
+        let tab = screen
+            .candidates()
+            .find(|&i| {
+                screen.element(i).class == "android.widget.Button"
+                    && screen.element(i).text == "Settings"
+            })
+            .unwrap();
+        assert_eq!(
+            describe_line(screen.element(tab), false),
+            r#"(973, 2244) "Settings" [tap]"#
+        );
+
+        let list = parse_screen(LIST).unwrap();
+        let lines: Vec<String> = list
+            .visible_texts()
+            .into_iter()
+            .map(|i| describe_line(list.element(i), list.is_covered(i)))
+            .collect();
+        assert!(lines.contains(&r#"(599, 362) "" [tap] [field]"#.to_string()));
+        assert!(lines.contains(&r#"(539, 1395) "🇵🇭 Philippines" [tap]"#.to_string()));
+        assert!(lines
+            .iter()
+            .any(|l| l.contains("Country Philippines") && l.ends_with("[covered]")));
+        assert!(
+            !lines.iter().any(|l| l.contains("Zimbabwe")),
+            "zero-height rows are not on screen"
+        );
+        assert!(
+            !lines
+                .iter()
+                .any(|l| l.contains(r#""" [tap]"#) && !l.contains("[field]")),
+            "unlabelled containers are left out unless they are fields"
+        );
+    }
+
+    #[test]
+    fn layout_containers_known_only_by_id_are_not_listed_but_id_only_buttons_are() {
+        let screen = parse_screen(
+            r#"<hierarchy>
+                <node resource-id="android:id/content" class="android.widget.FrameLayout" clickable="false" bounds="[0,126][1080,2329]">
+                    <node resource-id="com.app:id/submit" class="android.widget.ImageButton" clickable="true" bounds="[800,2000][1000,2200]" />
+                </node>
+            </hierarchy>"#,
+        )
+        .unwrap();
+        let labels: Vec<&str> = screen
+            .visible_texts()
+            .into_iter()
+            .map(|i| screen.element(i).label())
+            .collect();
+        assert_eq!(labels, ["com.app:id/submit"]);
+    }
+
+    #[test]
+    fn a_scrolling_list_does_not_cover_what_sits_above_it() {
+        // Real WebView dumps report a scrolled list from the top of its dialog, past the
+        // container that clips it, so taken at face value it covered the search field.
+        let list = parse_screen(LIST).unwrap();
+        let field = list.fields()[0];
+        assert!(!list.is_covered(field));
+        let close = list
+            .candidates()
+            .find(|&i| list.element(i).content_desc == "Close")
+            .unwrap();
+        assert!(!list.is_covered(close));
+    }
+
+    #[test]
+    fn fields_are_counted_from_the_top_and_the_uncovered_ones_win() {
+        let list = parse_screen(LIST).unwrap();
+        let fields = list.fields();
+        assert_eq!(fields.len(), 1);
+        assert_eq!(list.element(fields[0]).center(), (599, 362));
+        assert!(parse_screen(DIALOG).unwrap().fields().is_empty());
+
+        let two = parse_screen(
+            r#"<hierarchy>
+                <node class="android.widget.EditText" clickable="true" bounds="[0,900][500,1000]" />
+                <node class="android.widget.EditText" clickable="true" bounds="[0,300][500,400]" />
+                <node class="android.app.AlertDialog" bounds="[0,850][1080,1100]" />
+            </hierarchy>"#,
+        )
+        .unwrap();
+        let fields = two.fields();
+        assert_eq!(fields.len(), 1, "the field under the dialog is left out");
+        assert_eq!(two.element(fields[0]).center(), (250, 350));
+    }
+
+    #[test]
+    fn presence_is_judged_with_the_same_matching_as_taps() {
+        let screen = parse_screen(DIALOG).unwrap();
+        assert!(screen.has_match("Where are you based?", true));
+        assert!(screen.has_match("philippines", false));
+        assert!(!screen.has_match("Philippines", true));
+        assert!(!screen.has_match("Checkout", false));
     }
 
     #[test]

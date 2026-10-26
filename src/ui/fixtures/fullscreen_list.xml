@@ -27,12 +27,14 @@
           <node index="2" text="" resource-id="" class="android.view.View" package="com.example.app" content-desc="" clickable="false" bounds="[21,294][1057,430]">
             <node index="0" text="" resource-id="" class="android.widget.EditText" package="com.example.app" content-desc="" clickable="true" bounds="[162,294][1036,430]" />
           </node>
-          <node index="3" text="" resource-id="" class="android.widget.ListView" package="com.example.app" content-desc="" clickable="false" bounds="[0,126][1078,2329]">
+          <node index="3" text="" resource-id="" class="android.view.View" package="com.example.app" content-desc="" clickable="false" bounds="[0,462][1078,2328]">
+          <node index="0" text="" resource-id="" class="android.widget.ListView" package="com.example.app" content-desc="" clickable="false" bounds="[0,126][1078,2329]">
             <node index="0" text="&#127462;&#127467; Afghanistan" resource-id="" class="android.widget.Button" package="com.example.app" content-desc="" clickable="true" bounds="[0,126][1078,126]" />
             <node index="1" text="&#127477;&#127466; Peru" resource-id="" class="android.widget.Button" package="com.example.app" content-desc="" clickable="true" bounds="[0,1173][1078,1323]" />
             <node index="2" text="&#127477;&#127469; Philippines" resource-id="" class="android.widget.Button" package="com.example.app" content-desc="" clickable="true" bounds="[0,1320][1078,1470]" />
             <node index="3" text="&#127477;&#127473; Poland" resource-id="" class="android.widget.Button" package="com.example.app" content-desc="" clickable="true" bounds="[0,1467][1078,1617]" />
             <node index="4" text="&#127487;&#127484; Zimbabwe" resource-id="" class="android.widget.Button" package="com.example.app" content-desc="" clickable="true" bounds="[0,2329][1078,2329]" />
+          </node>
           </node>
         </node>
       </node>

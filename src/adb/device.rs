@@ -105,6 +105,23 @@ impl Device {
         Ok(())
     }
 
+    /// Opens an app's launcher screen, as tapping its icon would.
+    pub fn launch(&self, package: &str) -> Result<(), PalpError> {
+        if !is_package_name(package) {
+            return Err(PalpError::InvalidInput(format!(
+                "'{package}' is not an Android package name, such as com.example.app."
+            )));
+        }
+        // monkey exits non-zero with its reason on stdout; `; true` keeps that reason readable.
+        let output = self.shell(&format!(
+            "monkey -p {package} -c android.intent.category.LAUNCHER 1 2>&1; true"
+        ))?;
+        match launch_failure(&output) {
+            Some(reason) => Err(PalpError::AdbFailed(reason)),
+            None => Ok(()),
+        }
+    }
+
     /// Send hardware or navigation key event (e.g. BACK, HOME, ENTER).
     pub fn keyevent(&self, key: &str) -> Result<(), PalpError> {
         self.shell(&format!("input keyevent {}", key_code(key)?))?;
@@ -146,6 +163,24 @@ pub fn key_code(key: &str) -> Result<String, PalpError> {
     }
 }
 
+/// Dot-separated parts that each start with a letter, as Android requires. Checked before the
+/// name reaches the phone's shell.
+pub fn is_package_name(name: &str) -> bool {
+    let parts: Vec<&str> = name.split('.').collect();
+    parts.len() >= 2
+        && parts.iter().all(|part| {
+            part.starts_with(|c: char| c.is_ascii_alphabetic()) && is_plain_word(part, &['_'])
+        })
+}
+
+/// Why `monkey` could not open the app, when its output says it could not.
+pub fn launch_failure(monkey_output: &str) -> Option<String> {
+    (monkey_output.contains("No activities found") || monkey_output.contains("monkey aborted"))
+        .then(|| {
+            "No app with that package name is installed, or it has no launcher screen.".to_string()
+        })
+}
+
 /// True when `s` is non-empty ASCII letters and digits plus the `extra` characters, so it is
 /// one harmless word for the phone's shell.
 pub(crate) fn is_plain_word(s: &str, extra: &[char]) -> bool {
@@ -182,6 +217,34 @@ mod tests {
             String::from_utf8(out.stdout).unwrap(),
             AWKWARD.replace(' ', "%s")
         );
+    }
+
+    #[test]
+    fn only_real_looking_package_names_reach_the_shell() {
+        for good in ["com.vision_drafter.app", "com.example.app", "org.x1.y_2"] {
+            assert!(is_package_name(good), "{good}");
+        }
+        for bad in [
+            "app",
+            ".com.x",
+            "com..x",
+            "com.x.",
+            "com.x; reboot",
+            "com.x $(id)",
+            "1com.x",
+            "",
+        ] {
+            assert!(!is_package_name(bad), "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn a_launch_that_found_no_app_is_an_error() {
+        assert!(
+            launch_failure("Events injected: 1\n## Network stats: elapsed time=12ms").is_none()
+        );
+        let none = "  bash arg: -p\n** No activities found to run, monkey aborted.";
+        assert!(launch_failure(none).is_some());
     }
 
     #[test]

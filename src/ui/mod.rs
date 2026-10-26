@@ -1,3 +1,3 @@
 pub mod matcher;
 
-pub use matcher::{parse_screen, pick, Pick, PickRule, Rect, Screen, UiElement};
+pub use matcher::{describe_line, parse_screen, pick, Pick, PickRule, Rect, Screen, UiElement};

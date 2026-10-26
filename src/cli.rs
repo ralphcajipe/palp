@@ -38,6 +38,18 @@ pub enum Commands {
     /// Find visible text, accessibility label, or button ID on screen and tap its center
     TapText(TapTextArgs),
 
+    /// Wait until text appears on screen, or with --gone until it disappears
+    WaitText(WaitTextArgs),
+
+    /// Print the text and labels on screen with where to tap them (cheaper than a screenshot)
+    Texts(TextsArgs),
+
+    /// Tap the N-th text field from the top; fields rarely show their label to palp
+    TapField(TapFieldArgs),
+
+    /// Open an app by its package name, e.g. com.example.app
+    Launch(LaunchArgs),
+
     /// Type text into the currently active input field
     Type(TypeArgs),
 
@@ -112,4 +124,46 @@ pub struct SwipeArgs {
     /// Duration of swipe in milliseconds
     #[arg(default_value = "250")]
     pub duration: u32,
+}
+
+#[derive(Args, Debug)]
+pub struct WaitTextArgs {
+    /// Text or accessibility label to wait for
+    pub text: String,
+
+    /// Give up after this many seconds
+    #[arg(long, value_name = "SECONDS", default_value_t = 15)]
+    pub timeout: u64,
+
+    /// Wait for the text to disappear instead
+    #[arg(long)]
+    pub gone: bool,
+
+    /// Only whole-text matches count
+    #[arg(long)]
+    pub exact: bool,
+}
+
+#[derive(Args, Debug)]
+pub struct TextsArgs {
+    /// Print JSON instead of lines
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Args, Debug)]
+pub struct TapFieldArgs {
+    /// Which field, counted from the top of the screen
+    #[arg(default_value_t = 1)]
+    pub n: usize,
+
+    /// Keep looking for this many seconds while the screen loads (0 = look once)
+    #[arg(long, value_name = "SECONDS", default_value_t = 5)]
+    pub timeout: u64,
+}
+
+#[derive(Args, Debug)]
+pub struct LaunchArgs {
+    /// The app's package name, e.g. com.example.app
+    pub package: String,
 }

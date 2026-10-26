@@ -30,6 +30,12 @@ pub enum PalpError {
     #[error("{0}")]
     InvalidInput(String),
 
+    #[error("'{text}' did not appear on screen within {secs} s.")]
+    DidNotAppear { text: String, secs: u64 },
+
+    #[error("'{text}' was still on screen after {secs} s.")]
+    StillOnScreen { text: String, secs: u64 },
+
     #[error("ADB command failed: {0}")]
     AdbFailed(String),
 
