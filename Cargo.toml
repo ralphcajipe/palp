@@ -1,14 +1,14 @@
 [package]
 name = "palp"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 authors = ["Ralph Cajipe <ralphcajipe@gmail.com>"]
-description = "A fast, safe, and friendly mobile screen driver for AI coding agents and developers"
+description = "A fast, safe, and friendly mobile and desktop screen driver for AI coding agents and developers"
 readme = "README.md"
 homepage = "https://github.com/ralphcajipe/palp"
 repository = "https://github.com/ralphcajipe/palp"
 license = "MIT OR Apache-2.0"
-keywords = ["mobile", "agent", "adb", "automation", "cli"]
+keywords = ["mobile", "desktop", "agent", "adb", "automation"]
 categories = ["command-line-utilities", "development-tools::testing"]
 
 [dependencies]
