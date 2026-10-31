@@ -1,11 +1,14 @@
 pub mod adb;
 pub mod cli;
 pub mod config;
+pub mod desktop;
 pub mod doctor;
+pub mod driver;
 pub mod error;
 pub mod guard;
 pub mod image;
 pub mod probe;
+pub mod safety;
 pub mod ui;
 
 use clap::Parser;
@@ -18,11 +21,34 @@ use std::time::{Duration, Instant};
 use adb::{select_device, Device};
 use cli::{Cli, Commands};
 use config::{InsetsConfig, PalpConfig};
+use desktop::DesktopDriver;
+use driver::ScreenDriver;
 use error::PalpError;
 use guard::AnimationGuard;
 use image::crop_and_save;
 use probe::probe_device;
 use ui::{describe_line, parse_screen, pick, Pick, PickRule, Screen, UiElement};
+
+fn select_driver(target: Option<&str>) -> Result<Box<dyn ScreenDriver>, PalpError> {
+    if let Some(t) = target {
+        if t.eq_ignore_ascii_case("desktop")
+            || t.eq_ignore_ascii_case("host")
+            || t.eq_ignore_ascii_case("pc")
+        {
+            return Ok(Box::new(DesktopDriver::new()));
+        }
+        let dev = select_device(Some(t))?;
+        return Ok(Box::new(dev));
+    }
+
+    match select_device(None) {
+        Ok(dev) => Ok(Box::new(dev)),
+        Err(PalpError::NoDeviceConnected)
+        | Err(PalpError::AdbNotFound)
+        | Err(PalpError::AdbFailed(_)) => Ok(Box::new(DesktopDriver::new())),
+        Err(e) => Err(e),
+    }
+}
 
 fn main() {
     // Ctrl+C, SIGTERM and SIGHUP would otherwise end the process without running Drop and
@@ -49,19 +75,15 @@ fn run(cli: Cli) -> Result<(), PalpError> {
         }
 
         Commands::Probe(args) => {
-            let device = select_device(target)?;
-            let metrics = probe_device(&device)?;
+            let driver = select_driver(target)?;
+            let metrics = driver.probe()?;
 
             println!(
                 "{}",
-                "📱 Probed Device Display Specifications".cyan().bold()
+                "📱 Probed Display Specifications".cyan().bold()
             );
             println!("-----------------------------------------");
-            println!(
-                "• Device:             {} ({})",
-                device.serial.bold(),
-                device.model
-            );
+            println!("• Target:             {}", driver.name().bold());
             println!(
                 "• Physical Size:      {}x{} pixels",
                 metrics.width, metrics.height
@@ -80,7 +102,7 @@ fn run(cli: Cli) -> Result<(), PalpError> {
 
             if args.save {
                 let mut cfg = PalpConfig::load();
-                cfg.device = Some(device.serial.clone());
+                cfg.device = Some(driver.name().to_string());
                 cfg.insets = Some(InsetsConfig {
                     status_bar: metrics.status_bar_height,
                     navigation_bar: metrics.navigation_bar_height,
@@ -95,17 +117,18 @@ fn run(cli: Cli) -> Result<(), PalpError> {
         }
 
         Commands::Snap(args) => {
-            let device = select_device(target)?;
-            let metrics = probe_device(&device)?;
+            let driver = select_driver(target)?;
+            let metrics = driver.probe()?;
 
             let output_path = ensure_png_extension(&args.output);
-            println!("📸 Capturing screen from {}...", device.serial);
+            println!("📸 Capturing screen from {}...", driver.name());
 
-            let raw_png = device.screencap_png()?;
+            let raw_png = driver.screencap_png()?;
             let (w, h) = crop_and_save(&raw_png, &metrics, &output_path, args.width)?;
 
+            safety::log_audit("SNAP", &output_path.display().to_string());
             println!(
-                "{} Clean screenshot saved to {} ({}x{} px, status & nav bars removed)",
+                "{} Clean screenshot saved to {} ({}x{} px)",
                 "✓".green().bold(),
                 output_path.display().to_string().cyan(),
                 w,
@@ -114,11 +137,14 @@ fn run(cli: Cli) -> Result<(), PalpError> {
         }
 
         Commands::Tap(args) => {
-            let device = select_device(target)?;
-            let (x, y) = resolve_coordinates(&device, &args.target)?;
+            let driver = select_driver(target)?;
+            let (x, y) = resolve_coordinates(driver.as_ref(), &args.target)?;
 
-            println!("👆 Tapping screen at coordinates ({}, {})...", x, y);
-            device.tap(x, y)?;
+            safety::validate_bounds(x, y, None)?;
+            safety::log_audit("TAP", &format!("coords=({}, {})", x, y));
+
+            println!("👆 Tapping {} at coordinates ({}, {})...", driver.name(), x, y);
+            driver.tap(x, y)?;
             println!("{} Tapped successfully.", "✓".green().bold());
         }
 
@@ -137,6 +163,9 @@ fn run(cli: Cli) -> Result<(), PalpError> {
             )?;
             let picked = found.ok_or_else(|| PalpError::TextNotFound(args.text.clone()))?;
             let (cx, cy) = picked.chosen.center();
+
+            safety::validate_bounds(cx, cy, None)?;
+            safety::log_audit("TAP_TEXT", &format!("\"{}\" at ({}, {})", args.text, cx, cy));
 
             if picked.matches.len() > 1 {
                 println!(
@@ -264,6 +293,8 @@ fn run(cli: Cli) -> Result<(), PalpError> {
                 PalpError::InvalidInput(format!("Found no text field number {} on screen.", args.n))
             })?;
             let (x, y) = field.center();
+            safety::validate_bounds(x, y, None)?;
+            safety::log_audit("TAP_FIELD", &format!("n={} at ({}, {})", args.n, x, y));
             device.tap(x, y)?;
             println!(
                 "{} Tapped text field {} at ({}, {}).",
@@ -276,27 +307,31 @@ fn run(cli: Cli) -> Result<(), PalpError> {
 
         Commands::Launch(args) => {
             let device = select_device(target)?;
+            safety::log_audit("LAUNCH", &args.package);
             device.launch(&args.package)?;
             println!("{} Opened {}.", "✓".green().bold(), args.package);
         }
 
         Commands::Type(args) => {
-            let device = select_device(target)?;
-            println!("⌨️  Typing text: \"{}\"...", args.text);
-            device.input_text(&args.text)?;
+            let driver = select_driver(target)?;
+            safety::log_audit("TYPE", &format!("len={}", args.text.len()));
+            println!("⌨️  Typing text on {}: \"{}\"...", driver.name(), args.text);
+            driver.input_text(&args.text)?;
             println!("{} Typed successfully.", "✓".green().bold());
         }
 
         Commands::Press(args) => {
-            let device = select_device(target)?;
-            println!("🔘 Pressing key '{}'...", args.key);
-            device.keyevent(&args.key)?;
+            safety::validate_key(&args.key)?;
+            safety::log_audit("PRESS", &args.key);
+            let driver = select_driver(target)?;
+            println!("🔘 Pressing key '{}' on {}...", args.key, driver.name());
+            driver.keyevent(&args.key)?;
             println!("{} Key event sent successfully.", "✓".green().bold());
         }
 
         Commands::Swipe(args) => {
-            let device = select_device(target)?;
-            let metrics = probe_device(&device)?;
+            let driver = select_driver(target)?;
+            let metrics = driver.probe()?;
 
             let (x1, y1, x2, y2) = match args.direction_or_from.to_lowercase().as_str() {
                 "left" => {
@@ -334,11 +369,20 @@ fn run(cli: Cli) -> Result<(), PalpError> {
                 }
             };
 
-            println!(
-                "👉 Swiping from ({}, {}) to ({}, {}) over {}ms...",
-                x1, y1, x2, y2, args.duration
+            safety::log_audit(
+                "SWIPE",
+                &format!("from=({}, {}) to=({}, {}) duration={}ms", x1, y1, x2, y2, args.duration),
             );
-            device.swipe(x1, y1, x2, y2, args.duration)?;
+            println!(
+                "👉 Swiping on {} from ({}, {}) to ({}, {}) over {}ms...",
+                driver.name(),
+                x1,
+                y1,
+                x2,
+                y2,
+                args.duration
+            );
+            driver.swipe(x1, y1, x2, y2, args.duration)?;
             println!("{} Swiped successfully.", "✓".green().bold());
         }
 
@@ -479,7 +523,7 @@ fn ensure_png_extension(path: &Path) -> PathBuf {
 }
 
 /// Resolves user input into physical screen (x, y) coordinates.
-fn resolve_coordinates(device: &adb::Device, target: &str) -> Result<(u32, u32), PalpError> {
+fn resolve_coordinates(driver: &dyn ScreenDriver, target: &str) -> Result<(u32, u32), PalpError> {
     // 1. Check if it's a shortcut in .palprc.json
     let config = PalpConfig::load();
     if let Some(coords) = config.get_target(target) {
@@ -496,7 +540,7 @@ fn resolve_coordinates(device: &adb::Device, target: &str) -> Result<(u32, u32),
             // Normalized percentage (0.0 to 1.0)
             if let (Ok(fx), Ok(fy)) = (p1.parse::<f32>(), p2.parse::<f32>()) {
                 if fx <= 1.0 && fy <= 1.0 && fx >= 0.0 && fy >= 0.0 {
-                    let metrics = probe_device(device)?;
+                    let metrics = driver.probe()?;
                     let x = (metrics.width as f32 * fx).round() as u32;
                     let y = (metrics.height as f32 * fy).round() as u32;
                     return Ok((x, y));

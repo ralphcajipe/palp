@@ -1,5 +1,7 @@
 use crate::adb::{find_adb, list_devices, select_device};
 use crate::config::PalpConfig;
+use crate::desktop::DesktopDriver;
+use crate::driver::ScreenDriver;
 use crate::error::PalpError;
 use crate::guard::{heal_leftover, Leftover};
 use crate::probe::probe_device;
@@ -12,6 +14,37 @@ pub fn run_doctor(target_device: Option<&str>) -> Result<(), PalpError> {
         "🩺 palp Doctor - Diagnostic Health Check".bold().cyan()
     );
     println!("{}", "=========================================".cyan());
+
+    // 0. Check Host Desktop Screen
+    let desktop = DesktopDriver::new();
+    print!("Checking Host Desktop ({})... ", desktop.name());
+    if let Ok(metrics) = desktop.probe() {
+        println!(
+            "{} ({}x{} @ {} DPI, {}x scale)",
+            "✓ READY".green().bold(),
+            metrics.width,
+            metrics.height,
+            metrics.density_dpi,
+            metrics.scale_factor
+        );
+    } else {
+        println!("{}", "! UNAVAILABLE".yellow().bold());
+    }
+
+    if let Some(t) = target_device {
+        if t.eq_ignore_ascii_case("desktop")
+            || t.eq_ignore_ascii_case("host")
+            || t.eq_ignore_ascii_case("pc")
+        {
+            println!(
+                "\n{}",
+                "🎉 Host Desktop driver is ready for navigation (--device desktop)."
+                    .green()
+                    .bold()
+            );
+            return Ok(());
+        }
+    }
 
     // 1. Check ADB
     print!("Checking Android Debug Bridge (ADB)... ");

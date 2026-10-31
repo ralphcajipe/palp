@@ -129,6 +129,43 @@ impl Device {
     }
 }
 
+impl crate::driver::ScreenDriver for Device {
+    fn name(&self) -> &str {
+        &self.model
+    }
+
+    fn probe(&self) -> Result<crate::probe::DeviceMetrics, PalpError> {
+        crate::probe::probe_device(self)
+    }
+
+    fn screencap_png(&self) -> Result<Vec<u8>, PalpError> {
+        self.screencap_png()
+    }
+
+    fn tap(&self, x: u32, y: u32) -> Result<(), PalpError> {
+        self.tap(x, y)
+    }
+
+    fn input_text(&self, text: &str) -> Result<(), PalpError> {
+        self.input_text(text)
+    }
+
+    fn keyevent(&self, key: &str) -> Result<(), PalpError> {
+        self.keyevent(key)
+    }
+
+    fn swipe(
+        &self,
+        x1: u32,
+        y1: u32,
+        x2: u32,
+        y2: u32,
+        duration_ms: u32,
+    ) -> Result<(), PalpError> {
+        self.swipe(x1, y1, x2, y2, duration_ms)
+    }
+}
+
 /// Quotes text for `input text` so the phone's shell hands it over exactly as typed.
 ///
 /// Escaping inside double quotes let backticks run commands and typed a stray backslash
