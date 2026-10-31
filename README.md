@@ -1,6 +1,6 @@
 # 🦀 palp
 
-> **A fast, safe, and friendly mobile screen driver for AI coding agents and human developers.**
+> **A fast, safe, and friendly mobile and desktop screen driver for AI coding agents and human developers.**
 
 [![Crates.io](https://img.shields.io/crates/v/palp.svg)](https://crates.io/crates/palp)
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE-MIT)
@@ -10,9 +10,71 @@
 
 ## 💡 What is `palp`?
 
-`palp` gives AI coding assistants (**Google Antigravity**, **Claude Code**, **OpenAI Codex**) and human developers **sight and touch** on real mobile phones and emulators.
+`palp` gives AI coding assistants (**Google Antigravity**, **Claude Code**, **OpenAI Codex**) and human developers **sight and touch** across mobile devices and desktop screens.
 
-In biology, a **palp** is a gentle sensory organ that animals use to feel, touch, and explore their environment. `palp` does the same for software: it lets tools feel and navigate mobile screens safely.
+In biology, a **palp** is a gentle sensory organ that animals use to feel, touch, and explore their environment. `palp` does the same for software: it lets tools feel and navigate screens safely.
+
+---
+
+## 🏗️ System Architecture
+
+```mermaid
+flowchart TD
+    subgraph Clients["1. Clients & Controllers"]
+        Agent["🤖 AI Coding Agents<br/>(Google Antigravity, Claude Code, Cursor)"]
+        Human["👨‍💻 Human Developers<br/>(Terminal CLI, Scripts, Hotkeys)"]
+    end
+
+    subgraph Core["2. palp Engine (Single Native Binary · &lt;10ms · &lt;15MB RAM)"]
+        CLI["CLI Command Parser & Target Router"]
+        
+        subgraph Safety["🛡️ Anti-Destructive Safety Layer"]
+            Jail["Window Jailing & App Scoping"]
+            Killswitch["Corner-Slam Killswitch & Esc Trap"]
+            KeyBlock["Dangerous Hotkey Blocklist"]
+            Audit["Local Audit Logger (.palp/audit.log)"]
+        end
+        
+        Driver["Universal Driver Abstraction (ScreenDriver Trait)"]
+    end
+
+    subgraph Targets["3. Hardware & OS Targets"]
+        subgraph Mobile["📱 Mobile Devices & Emulators"]
+            ADB["Android Driver (ADB)"]
+            ADB_Cap["RAM Screencap & SIMD Crop"]
+            ADB_Touch["input tap / swipe / text"]
+            ADB_UI["uiautomator XML Tree"]
+        end
+
+        subgraph Desktop["💻 Desktop Host Screens"]
+            Desk["Desktop Driver (Win / macOS / Linux)"]
+            Desk_Cap["Fast Screen Capture (DXGI / SCKit / X11)"]
+            Desk_Input["Native Input (SendInput / CGEvent / XTest)"]
+            Desk_UI["OS Accessibility (UIA / AXUI / AT-SPI)"]
+        end
+    end
+
+    Clients --> CLI
+    CLI --> Safety
+    Safety --> Driver
+    Driver --> ADB
+    Driver --> Desk
+    ADB --> ADB_Cap & ADB_Touch & ADB_UI
+    Desk --> Desk_Cap & Desk_Input & Desk_UI
+```
+
+---
+
+## 📚 Documentation & Deep Dives
+
+For in-depth explanations, benchmarks, and security architecture, explore our modular documentation guides:
+
+| Guide | Description |
+| :--- | :--- |
+| **[🏗️ Technical Architecture](docs/ARCHITECTURE.md)** | `ScreenDriver` trait design, mobile vs. desktop engines, and internal mechanics. |
+| **[🛡️ Safety & Privacy Guide](docs/SAFETY_AND_PRIVACY.md)** | Anti-destructive guardrails, window jailing, emergency killswitch, and zero-cloud privacy. |
+| **[⚡ Performance & Benchmarks](docs/PERFORMANCE.md)** | Precompiled native binary execution, zero recompilation by AI agents, <10ms startup, and RAM benchmarks. |
+| **[📄 Licensing Rationale](docs/LICENSING.md)** | Plain-English explanation of why `palp` is dual-licensed under `MIT OR Apache-2.0`. |
 
 ---
 
@@ -20,12 +82,12 @@ In biology, a **palp** is a gentle sensory organ that animals use to feel, touch
 
 ### 1. Zero-Prompt Automation for AI Assistants
 When pair-programming with AI coding assistants (**Google Antigravity**, **Claude Code**, **OpenAI Codex**), you do **not** need to type `palp` commands yourself:
-- Run `palp init` once in your project folder—it auto-wires rules into `AGENTS.md`, `CLAUDE.md`, or `.cursorrules`.
+- Run `palp init` once in your project folder; it auto-wires rules into `AGENTS.md`, `CLAUDE.md`, or `.cursorrules`.
 - Then, simply speak to your AI in plain English:  
   > *"Sign in with the test account and check if the home feed loads."*  
   > *"Tap 'Add to Cart' and verify that the checkout button appears."*  
   > *"Swipe through the onboarding slides and tap 'Get Started'."*
-- The AI automatically chooses `palp tap-text`, `palp swipe`, and `palp snap` behind the scenes—navigating your phone autonomously without guessing coordinates or freezing on animations.
+- The AI automatically chooses `palp tap-text`, `palp swipe`, and `palp snap` behind the scenes, navigating your phone autonomously without guessing coordinates or freezing on animations.
 
 ### 2. Eliminating Repetitive Manual Screen Tapping for Developers
 When coding without an AI assistant, manual screen tapping is slow and breaks your flow:
@@ -185,14 +247,15 @@ This generates `AGENT_DEVICE.md`, auto-wires your AI agent rules (`AGENTS.md`, `
 
 ## 🧪 Tested On
 
-macOS with a physical Android phone. The timeout and Ctrl+C handling use only the Rust standard library and the `ctrlc` crate and are written for Linux and Windows too, but have not been tested there yet.
+macOS and Windows 11 with physical Android phones and desktop screens. The timeout and Ctrl+C handling use only the Rust standard library and the `ctrlc` crate across macOS, Linux, and Windows.
 
 ---
 
 ## 📄 License
 
-Dual-licensed under either of:
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
-- MIT License ([LICENSE-MIT](LICENSE-MIT))
+`palp` is dual-licensed under both the **MIT License** and the **Apache License (Version 2.0)**.
 
-at your option.
+- **[MIT License](LICENSE-MIT)**: Simple, permissive, and 100% compatible with GPLv2 and open-source projects.
+- **[Apache License 2.0](LICENSE-APACHE)**: Provides explicit patent protection and corporate legal certainty.
+
+*You can freely choose whichever license best fits your project.* To learn why Rust crates use this dual license and how it protects you, see our [**Licensing Guide**](docs/LICENSING.md).
