@@ -3,3 +3,5 @@
 Cargo.lock
 .palprc.json
 *.png
+AGENTS.md
+.palp/
