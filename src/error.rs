@@ -52,4 +52,13 @@ pub enum PalpError {
 
     #[error("Configuration format error: {0}")]
     Json(#[from] serde_json::Error),
+
+    #[error("🛑 Emergency Fail-Safe Activated: Mouse cursor placed at screen corner (0,0) or manual abort requested. Halting all input.")]
+    EmergencyStop,
+
+    #[error("🛡️ Safety Violation: Action blocked by safety guardrails: {0}")]
+    ActionBlocked(String),
+
+    #[error("🛡️ Bounds Violation: Target coordinates ({x}, {y}) fall outside permitted app window [{bounds}].")]
+    BoundsViolation { x: u32, y: u32, bounds: String },
 }
